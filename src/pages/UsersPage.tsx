@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,9 @@ const UsersPage = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [form, setForm] = useState({ full_name: "", email: "", password: "", role: "viewer" });
+  const [passwordTarget, setPasswordTarget] = useState<UserRow | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
+  const [changingPassword, setChangingPassword] = useState(false);
   const { session, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -169,6 +173,34 @@ const UsersPage = () => {
   };
 
   const isSelf = (userId: string) => userId === currentUserId;
+
+  const handleAdminChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordTarget) return;
+    if (passwordForm.newPassword.length < 8) {
+      toast({ title: "A senha deve ter no mínimo 8 caracteres", variant: "destructive" });
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({ title: "As senhas não coincidem", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("change-password", {
+        body: { target_user_id: passwordTarget.user_id, new_password: passwordForm.newPassword },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Senha alterada com sucesso" });
+      setPasswordTarget(null);
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+    } catch (err: unknown) {
+      toast({ title: "Erro ao alterar senha", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -282,6 +314,10 @@ const UsersPage = () => {
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => setEditUser({ ...user })}>
                                     Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setPasswordTarget(user)}>
+                                    <KeyRound className="w-4 h-4 mr-2" />
+                                    Alterar Senha
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className={user.active ? "text-destructive" : ""}
@@ -399,6 +435,50 @@ const UsersPage = () => {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Change Password Dialog */}
+      <Dialog open={!!passwordTarget} onOpenChange={(open) => { if (!open) { setPasswordTarget(null); setPasswordForm({ newPassword: "", confirmPassword: "" }); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Senha — {passwordTarget?.full_name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdminChangePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nova Senha</Label>
+              <Input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                placeholder="Mínimo 8 caracteres"
+                minLength={8}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirmar Senha</Label>
+              <Input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                placeholder="Repita a senha"
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={changingPassword}>
+                {changingPassword ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Alterando...
+                  </>
+                ) : (
+                  "Confirmar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </AppLayout>
