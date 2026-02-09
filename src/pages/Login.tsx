@@ -38,7 +38,7 @@ const Login = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-sidebar-accent-foreground">
-                CargoControl
+                Cargas Flow
               </h1>
               <p className="text-sm text-sidebar-foreground">
                 Gestão de Cargas SaaS
@@ -76,7 +76,7 @@ const Login = () => {
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary">
               <Shield className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">CargoControl</span>
+            <span className="text-xl font-bold">Cargas Flow</span>
           </div>
 
           <div className="mb-8">
@@ -144,7 +144,7 @@ const Login = () => {
           </Card>
 
           <p className="text-xs text-center text-muted-foreground mt-8">
-            © 2026 CargoControl. Todos os direitos reservados.
+            © 2026 Cargas Flow. Todos os direitos reservados.
           </p>
         </div>
       </div>
