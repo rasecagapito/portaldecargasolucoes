@@ -1,8 +1,18 @@
 import { Bell, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Topbar = () => {
+  const { profile, tenant } = useAuth();
+
+  const initials = profile?.full_name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() ?? "??";
+
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 bg-card border-b border-border">
       {/* Search */}
@@ -25,14 +35,16 @@ const Topbar = () => {
         {/* Tenant + User */}
         <div className="flex items-center gap-3 pl-4 border-l border-border">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium leading-none">Admin User</p>
+            <p className="text-sm font-medium leading-none">
+              {profile?.full_name ?? "Carregando..."}
+            </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Empresa Demo
+              {tenant?.name ?? "—"}
             </p>
           </div>
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-              AD
+              {initials}
             </AvatarFallback>
           </Avatar>
         </div>
