@@ -1,12 +1,4 @@
-import {
-  Truck,
-  Users,
-  Activity,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  ArrowUpRight,
-} from "lucide-react";
+import { Truck, Users, Activity, CheckCircle2, Clock, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AppLayout from "@/components/layout/AppLayout";
@@ -49,35 +41,35 @@ const stats = [
 const recentExecutions = [
   {
     id: "exec_001",
-    workflow: "Sync Estoque",
+    workflow: "Codigo de Imposto",
     status: "success",
     user: "João S.",
     time: "2 min atrás",
   },
   {
     id: "exec_002",
-    workflow: "Importar NFs",
+    workflow: "Parceiro de Negocio",
     status: "running",
     user: "Maria L.",
     time: "5 min atrás",
   },
   {
     id: "exec_003",
-    workflow: "Relatório Diário",
+    workflow: "Itens",
     status: "error",
     user: "Admin",
     time: "12 min atrás",
   },
   {
     id: "exec_004",
-    workflow: "Atualizar Preços",
+    workflow: "Itens",
     status: "success",
     user: "Carlos R.",
     time: "25 min atrás",
   },
   {
     id: "exec_005",
-    workflow: "Backup DB",
+    workflow: "Plano de Contas",
     status: "queued",
     user: "Sistema",
     time: "30 min atrás",
@@ -98,9 +90,7 @@ const Home = () => {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Visão geral das operações
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Visão geral das operações</p>
         </div>
 
         {/* Stats */}
@@ -118,9 +108,7 @@ const Home = () => {
                   </span>
                 </div>
                 <p className="text-2xl font-bold">{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stat.title}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{stat.title}</p>
               </CardContent>
             </Card>
           ))}
@@ -129,9 +117,7 @@ const Home = () => {
         {/* Recent Executions */}
         <Card className="border border-border">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">
-              Últimas Execuções
-            </CardTitle>
+            <CardTitle className="text-base font-semibold">Últimas Execuções</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-1">
@@ -149,31 +135,22 @@ const Home = () => {
                           exec.status === "success"
                             ? "text-status-success"
                             : exec.status === "error"
-                            ? "text-status-error"
-                            : exec.status === "running"
-                            ? "text-status-warning animate-pulse-slow"
-                            : "text-primary"
+                              ? "text-status-error"
+                              : exec.status === "running"
+                                ? "text-status-warning animate-pulse-slow"
+                                : "text-primary"
                         }`}
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {exec.workflow}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {exec.user}
-                        </p>
+                        <p className="text-sm font-medium truncate">{exec.workflow}</p>
+                        <p className="text-xs text-muted-foreground">{exec.user}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <Badge
-                        variant="secondary"
-                        className={`text-[11px] font-medium px-2 py-0.5 ${config.class}`}
-                      >
+                      <Badge variant="secondary" className={`text-[11px] font-medium px-2 py-0.5 ${config.class}`}>
                         {config.label}
                       </Badge>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {exec.time}
-                      </span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{exec.time}</span>
                     </div>
                   </div>
                 );
