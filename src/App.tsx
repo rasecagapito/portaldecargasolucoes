@@ -24,10 +24,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-            <Route path="/usuarios" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
-            <Route path="/cargas" element={<ProtectedRoute><CargasPage /></ProtectedRoute>} />
-            <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
+            <Route path="/home" element={<ProtectedRoute module="dashboard"><Home /></ProtectedRoute>} />
+            <Route path="/usuarios" element={<ProtectedRoute module="usuarios"><UsersPage /></ProtectedRoute>} />
+            <Route path="/cargas" element={<ProtectedRoute module="cargas"><CargasPage /></ProtectedRoute>} />
+            <Route path="/configuracoes" element={<ProtectedRoute module="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

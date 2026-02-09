@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -37,10 +41,12 @@ import {
   Pencil,
   Trash2,
   Webhook,
+  Users,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-/* ────── Mock data ────── */
+/* ────── Mock data (unchanged tabs) ────── */
 
 const tenantInfo = {
   name: "Empresa Demo",
@@ -113,15 +119,6 @@ const webhookSecrets = [
   },
 ];
 
-const auditLogs = [
-  { id: "1", action: "webhook.rotated", actor: "admin@empresa.com", target: "n8n Principal", timestamp: "2026-02-01 14:32", ip: "192.168.1.10" },
-  { id: "2", action: "module.enabled", actor: "admin@empresa.com", target: "Relatórios", timestamp: "2026-01-28 09:15", ip: "192.168.1.10" },
-  { id: "3", action: "user.created", actor: "admin@empresa.com", target: "joao@empresa.com", timestamp: "2026-01-25 16:45", ip: "192.168.1.10" },
-  { id: "4", action: "tenant.updated", actor: "admin@empresa.com", target: "Empresa Demo", timestamp: "2026-01-20 11:20", ip: "192.168.1.10" },
-  { id: "5", action: "webhook.created", actor: "admin@empresa.com", target: "n8n Backup", timestamp: "2026-01-22 08:00", ip: "192.168.1.10" },
-  { id: "6", action: "role.updated", actor: "admin@empresa.com", target: "Operador", timestamp: "2026-01-19 13:10", ip: "192.168.1.10" },
-];
-
 const actionLabels: Record<string, string> = {
   "webhook.rotated": "Segredo rotacionado",
   "webhook.created": "Segredo criado",
@@ -129,13 +126,41 @@ const actionLabels: Record<string, string> = {
   "module.disabled": "Módulo desativado",
   "user.created": "Usuário criado",
   "user.updated": "Usuário atualizado",
+  "user.activated": "Usuário ativado",
+  "user.deactivated": "Usuário desativado",
   "tenant.updated": "Tenant atualizado",
   "role.updated": "Role atualizada",
+  "permission.updated": "Permissão alterada",
+};
+
+const moduleLabels: Record<string, string> = {
+  dashboard: "Dashboard",
+  cargas: "Cargas",
+  usuarios: "Usuários",
+  configuracoes: "Configurações",
+};
+
+const roleLabels: Record<string, string> = {
+  admin: "Admin",
+  operator: "Operador",
+  viewer: "Visualizador",
 };
 
 /* ────── Component ────── */
 
+interface RoleModuleRow {
+  id: string;
+  role: string;
+  module: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
 const ConfiguracoesPage = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [moduleStates, setModuleStates] = useState(
     modules.reduce((acc, m) => ({ ...acc, [m.id]: m.enabled }), {} as Record<string, boolean>)
   );
@@ -147,6 +172,73 @@ const ConfiguracoesPage = () => {
 
   const handleRotateSecret = (secretId: string) => {
     toast.info("⚠️ Rotação de segredo será executada via Edge Function. O hash antigo será invalidado e um novo será gerado.");
+  };
+
+  // Fetch role_modules for permissions tab
+  const { data: roleModules = [], isLoading: loadingPerms } = useQuery({
+    queryKey: ["role-modules"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("role_modules")
+        .select("id, role, module, can_view, can_create, can_edit, can_delete")
+        .order("role")
+        .order("module");
+      if (error) throw error;
+      return (data ?? []) as RoleModuleRow[];
+    },
+  });
+
+  // Fetch audit_logs from DB
+  const { data: auditLogs = [], isLoading: loadingAudit } = useQuery({
+    queryKey: ["audit-logs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select("id, action, actor_id, target_type, target_id, details, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const permMutation = useMutation({
+    mutationFn: async (payload: { role: string; module: string; field: string; value: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("manage-permissions", {
+        body: {
+          action: "update",
+          role: payload.role,
+          module: payload.module,
+          [payload.field]: payload.value,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["role-modules"] });
+      toast.success("Permissão atualizada");
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao atualizar permissão: " + err.message);
+    },
+  });
+
+  const handlePermToggle = (role: string, module: string, field: string, currentValue: boolean) => {
+    if (role === "admin") {
+      toast.error("Permissões de admin não podem ser alteradas");
+      return;
+    }
+    permMutation.mutate({ role, module, field, value: !currentValue });
+  };
+
+  // Group role_modules by role
+  const roleGroups = ["admin", "operator", "viewer"];
+  const moduleList = ["dashboard", "cargas", "usuarios", "configuracoes"];
+
+  const getPermission = (role: string, module: string): RoleModuleRow | undefined => {
+    return roleModules.find((rm) => rm.role === role && rm.module === module);
   };
 
   return (
@@ -184,6 +276,10 @@ const ConfiguracoesPage = () => {
             <TabsTrigger value="modulos" className="gap-1.5 text-xs">
               <Blocks className="w-3.5 h-3.5" />
               Módulos
+            </TabsTrigger>
+            <TabsTrigger value="permissoes" className="gap-1.5 text-xs">
+              <Users className="w-3.5 h-3.5" />
+              Perfis e Permissões
             </TabsTrigger>
             <TabsTrigger value="seguranca" className="gap-1.5 text-xs">
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -285,6 +381,80 @@ const ConfiguracoesPage = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* ─── PERFIS E PERMISSÕES ─── */}
+          <TabsContent value="permissoes" className="space-y-4">
+            <Card className="p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Perfis e Permissões</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure quais módulos cada role pode acessar e quais ações pode realizar.
+                </p>
+              </div>
+
+              {loadingPerms ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="text-xs font-semibold min-w-[100px]">Role</TableHead>
+                        <TableHead className="text-xs font-semibold min-w-[100px]">Módulo</TableHead>
+                        <TableHead className="text-xs text-center">Visualizar</TableHead>
+                        <TableHead className="text-xs text-center">Criar</TableHead>
+                        <TableHead className="text-xs text-center">Editar</TableHead>
+                        <TableHead className="text-xs text-center">Excluir</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {roleGroups.map((role) =>
+                        moduleList.map((module, mi) => {
+                          const perm = getPermission(role, module);
+                          const isAdmin = role === "admin";
+                          return (
+                            <TableRow key={`${role}-${module}`} className={mi === 0 ? "border-t-2" : ""}>
+                              {mi === 0 && (
+                                <TableCell rowSpan={moduleList.length} className="align-top font-medium text-sm border-r">
+                                  <Badge variant={isAdmin ? "default" : "secondary"} className="text-xs">
+                                    {roleLabels[role]}
+                                  </Badge>
+                                  {isAdmin && (
+                                    <p className="text-[10px] text-muted-foreground mt-1">Acesso total</p>
+                                  )}
+                                </TableCell>
+                              )}
+                              <TableCell className="text-sm">{moduleLabels[module]}</TableCell>
+                              {(["can_view", "can_create", "can_edit", "can_delete"] as const).map((field) => (
+                                <TableCell key={field} className="text-center">
+                                  <Checkbox
+                                    checked={perm?.[field] ?? false}
+                                    disabled={isAdmin || permMutation.isPending}
+                                    onCheckedChange={() =>
+                                      handlePermToggle(role, module, field, perm?.[field] ?? false)
+                                    }
+                                  />
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  Permissões de Admin são fixas e não podem ser alteradas. Todas as mudanças são registradas em audit_logs.
+                </p>
               </div>
             </Card>
           </TabsContent>
@@ -488,34 +658,48 @@ const ConfiguracoesPage = () => {
                 </Badge>
               </div>
 
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Ação</TableHead>
-                      <TableHead className="text-xs">Ator</TableHead>
-                      <TableHead className="text-xs">Alvo</TableHead>
-                      <TableHead className="text-xs">Data/Hora</TableHead>
-                      <TableHead className="text-xs">IP</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auditLogs.map((log) => (
-                      <TableRow key={log.id} className="hover:bg-muted/20">
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px] font-mono">
-                            {actionLabels[log.action] || log.action}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{log.actor}</TableCell>
-                        <TableCell className="text-xs font-medium">{log.target}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{log.timestamp}</TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">{log.ip}</TableCell>
+              {loadingAudit ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Nenhum log de auditoria encontrado
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="text-xs">Ação</TableHead>
+                        <TableHead className="text-xs">Alvo</TableHead>
+                        <TableHead className="text-xs">Detalhes</TableHead>
+                        <TableHead className="text-xs">Data/Hora</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {auditLogs.map((log) => (
+                        <TableRow key={log.id} className="hover:bg-muted/20">
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              {actionLabels[log.action] || log.action}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">
+                            {log.target_type}: {log.target_id?.slice(0, 8)}…
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                            {log.details ? JSON.stringify(log.details) : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(log.created_at).toLocaleString("pt-BR")}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 mt-4">
                 <Info className="w-3.5 h-3.5 text-muted-foreground" />

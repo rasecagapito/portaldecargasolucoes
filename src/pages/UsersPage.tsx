@@ -46,6 +46,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import AppLayout from "@/components/layout/AppLayout";
 
 interface UserRow {
@@ -68,14 +73,15 @@ const UsersPage = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [form, setForm] = useState({ full_name: "", email: "", password: "", role: "viewer" });
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const currentUserId = user?.id;
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["tenant-users"],
     queryFn: async () => {
-      // Get profiles + roles for current tenant (RLS handles tenant filtering)
       const { data: profiles, error } = await supabase
         .from("profiles")
         .select("user_id, full_name, active, tenant_id");
@@ -92,7 +98,7 @@ const UsersPage = () => {
         user_id: p.user_id,
         full_name: p.full_name,
         active: p.active,
-        email: "", // Not available from profiles - will show user_id based fallback
+        email: "",
         role: roleMap.get(p.user_id) ?? "viewer",
         last_sign_in_at: null,
       })) as UserRow[];
@@ -162,6 +168,8 @@ const UsersPage = () => {
     });
   };
 
+  const isSelf = (userId: string) => userId === currentUserId;
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -220,10 +228,18 @@ const UsersPage = () => {
                   ) : (
                     filtered.map((user) => {
                       const role = roleConfig[user.role] ?? roleConfig.viewer;
+                      const self = isSelf(user.user_id);
                       return (
                         <TableRow key={user.user_id}>
                           <TableCell className="pl-6">
-                            <p className="text-sm font-medium">{user.full_name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{user.full_name}</p>
+                              {self && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  Você
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">
@@ -245,24 +261,37 @@ const UsersPage = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setEditUser({ ...user })}>
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className={user.active ? "text-destructive" : ""}
-                                  onClick={() => toggleActive(user)}
-                                >
-                                  {user.active ? "Desativar" : "Ativar"}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {self ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-40 cursor-not-allowed" disabled>
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Você não pode alterar seu próprio status ou perfil.
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => setEditUser({ ...user })}>
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className={user.active ? "text-destructive" : ""}
+                                    onClick={() => toggleActive(user)}
+                                  >
+                                    {user.active ? "Desativar" : "Ativar"}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

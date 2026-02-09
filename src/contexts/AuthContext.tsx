@@ -13,14 +13,31 @@ interface Tenant {
   slug: string;
 }
 
+type AppRole = "admin" | "operator" | "viewer";
+
+interface ModulePermission {
+  module: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   tenant: Tenant | null;
+  role: AppRole | null;
+  permissions: ModulePermission[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  hasModuleAccess: (module: string) => boolean;
+  canCreate: (module: string) => boolean;
+  canEdit: (module: string) => boolean;
+  canDelete: (module: string) => boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,23 +47,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [permissions, setPermissions] = useState<ModulePermission[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfileAndTenant = async (userId: string) => {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("full_name, avatar_url, tenant_id")
-      .eq("user_id", userId)
-      .single();
+  const fetchUserData = async (userId: string) => {
+    // Fetch profile, role, and tenant in parallel
+    const [profileRes, roleRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("full_name, avatar_url, tenant_id")
+        .eq("user_id", userId)
+        .single(),
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .single(),
+    ]);
 
-    if (profileData) {
-      setProfile(profileData);
-      const { data: tenantData } = await supabase
-        .from("tenants")
-        .select("name, slug")
-        .eq("id", profileData.tenant_id)
-        .single();
-      setTenant(tenantData);
+    if (profileRes.data) {
+      setProfile(profileRes.data);
+
+      const [tenantRes, permRes] = await Promise.all([
+        supabase
+          .from("tenants")
+          .select("name, slug")
+          .eq("id", profileRes.data.tenant_id)
+          .single(),
+        supabase
+          .from("role_modules")
+          .select("module, can_view, can_create, can_edit, can_delete")
+          .eq("tenant_id", profileRes.data.tenant_id)
+          .eq("role", roleRes.data?.role ?? "viewer"),
+      ]);
+
+      setTenant(tenantRes.data);
+      setPermissions(permRes.data ?? []);
+    }
+
+    if (roleRes.data) {
+      setRole(roleRes.data.role as AppRole);
     }
   };
 
@@ -56,10 +97,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => fetchProfileAndTenant(session.user.id), 0);
+          setTimeout(() => fetchUserData(session.user.id), 0);
         } else {
           setProfile(null);
           setTenant(null);
+          setRole(null);
+          setPermissions([]);
         }
         setLoading(false);
       }
@@ -69,7 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfileAndTenant(session.user.id);
+        fetchUserData(session.user.id);
       }
       setLoading(false);
     });
@@ -86,8 +129,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  const hasModuleAccess = (module: string) => {
+    if (role === "admin") return true;
+    return permissions.some((p) => p.module === module && p.can_view);
+  };
+
+  const canCreate = (module: string) => {
+    if (role === "admin") return true;
+    return permissions.some((p) => p.module === module && p.can_create);
+  };
+
+  const canEdit = (module: string) => {
+    if (role === "admin") return true;
+    return permissions.some((p) => p.module === module && p.can_edit);
+  };
+
+  const canDelete = (module: string) => {
+    if (role === "admin") return true;
+    return permissions.some((p) => p.module === module && p.can_delete);
+  };
+
+  const isAdmin = role === "admin";
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, tenant, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session, user, profile, tenant, role, permissions, loading,
+        signIn, signOut, hasModuleAccess, canCreate, canEdit, canDelete, isAdmin,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

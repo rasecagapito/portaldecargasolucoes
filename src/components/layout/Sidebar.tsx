@@ -16,14 +16,14 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   path: string;
-  adminOnly?: boolean;
+  module: string;
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/home" },
-  { label: "Cargas", icon: Truck, path: "/cargas" },
-  { label: "Usuários", icon: Users, path: "/usuarios", adminOnly: true },
-  { label: "Configurações", icon: Settings, path: "/configuracoes", adminOnly: true },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/home", module: "dashboard" },
+  { label: "Cargas", icon: Truck, path: "/cargas", module: "cargas" },
+  { label: "Usuários", icon: Users, path: "/usuarios", module: "usuarios" },
+  { label: "Configurações", icon: Settings, path: "/configuracoes", module: "configuracoes" },
 ];
 
 interface SidebarProps {
@@ -34,7 +34,9 @@ interface SidebarProps {
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, hasModuleAccess } = useAuth();
+
+  const visibleItems = navItems.filter((item) => hasModuleAccess(item.module));
 
   return (
     <aside
@@ -64,7 +66,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <button
