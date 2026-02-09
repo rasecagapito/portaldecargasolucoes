@@ -28,15 +28,15 @@ const availableCargas = [
   },
   {
     id: "carga_02",
-    name: "Impostos",
-    description: "ealizar Carga de Parceiros de Itens",
+    name: "Tipo de Impostos",
+    description: "Realizar carga de Tipo de Impostos",
     lastRun: "Hoje, 10:15",
     avgTime: "2min",
   },
   {
     id: "carga_03",
     name: "Itens",
-    description: "Gera relatórios consolidados",
+    description: "Plano de Contas",
     lastRun: "Ontem, 23:00",
     avgTime: "1min 30s",
   },
