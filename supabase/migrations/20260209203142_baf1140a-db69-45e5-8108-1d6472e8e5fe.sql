@@ -1,0 +1,1 @@
+INSERT INTO public.tenants (name, slug) VALUES ('Empresa Teste', 'empresa-teste');
