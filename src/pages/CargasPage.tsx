@@ -21,8 +21,8 @@ import AppLayout from "@/components/layout/AppLayout";
 const availableCargas = [
   {
     id: "carga_01",
-    name: "Sync Estoque",
-    description: "Sincroniza estoque com ERP",
+    name: "Parceiro de Negocio",
+    description: "Realizar Carga de Parceiros de Negocio",
     lastRun: "Hoje, 14:30",
     avgTime: "45s",
   },
