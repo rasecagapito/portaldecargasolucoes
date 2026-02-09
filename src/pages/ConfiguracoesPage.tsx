@@ -31,6 +31,12 @@ import {
   XCircle,
   KeyRound,
   Clock,
+  Truck,
+  Link2,
+  Plus,
+  Pencil,
+  Trash2,
+  Webhook,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,6 +57,41 @@ const modules = [
   { id: "configuracoes", label: "Configurações", enabled: true, description: "Configurações do tenant e segurança" },
   { id: "relatorios", label: "Relatórios", enabled: false, description: "Relatórios avançados e analytics" },
   { id: "integracoes", label: "Integrações", enabled: false, description: "Integrações com sistemas externos" },
+];
+
+const cargaTypes = [
+  {
+    id: "ct-1",
+    name: "Carga Completa (FTL)",
+    description: "Transporte de carga lotação, veículo dedicado",
+    webhookUrl: "https://n8n.exemplo.com/webhook/ftl-dispatch",
+    webhookStatus: "connected" as const,
+    lastTriggered: "2026-02-08 16:30",
+  },
+  {
+    id: "ct-2",
+    name: "Carga Fracionada (LTL)",
+    description: "Transporte compartilhado com consolidação",
+    webhookUrl: "https://n8n.exemplo.com/webhook/ltl-dispatch",
+    webhookStatus: "connected" as const,
+    lastTriggered: "2026-02-07 09:15",
+  },
+  {
+    id: "ct-3",
+    name: "Carga Expressa",
+    description: "Entrega prioritária com prazo reduzido",
+    webhookUrl: "",
+    webhookStatus: "disconnected" as const,
+    lastTriggered: null,
+  },
+  {
+    id: "ct-4",
+    name: "Carga Refrigerada",
+    description: "Transporte com controle de temperatura",
+    webhookUrl: "https://n8n.exemplo.com/webhook/reefer-dispatch",
+    webhookStatus: "error" as const,
+    lastTriggered: "2026-01-30 12:00",
+  },
 ];
 
 const webhookSecrets = [
@@ -147,6 +188,10 @@ const ConfiguracoesPage = () => {
             <TabsTrigger value="seguranca" className="gap-1.5 text-xs">
               <ShieldCheck className="w-3.5 h-3.5" />
               Segurança
+            </TabsTrigger>
+            <TabsTrigger value="cargas" className="gap-1.5 text-xs">
+              <Truck className="w-3.5 h-3.5" />
+              Cargas
             </TabsTrigger>
             <TabsTrigger value="auditoria" className="gap-1.5 text-xs">
               <ScrollText className="w-3.5 h-3.5" />
@@ -320,6 +365,109 @@ const ConfiguracoesPage = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* ─── CARGAS ─── */}
+          <TabsContent value="cargas" className="space-y-4">
+            <Card className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Tipos de Carga</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Configure os tipos de carga e vincule os webhooks do n8n para cada fluxo
+                  </p>
+                </div>
+                <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => toast.info("⚠️ Criação de tipo de carga será processada via Edge Function.")}>
+                  <Plus className="w-3 h-3" />
+                  Nova Carga
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {cargaTypes.map((carga) => (
+                  <div
+                    key={carga.id}
+                    className="p-4 rounded-lg border bg-card space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Truck className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{carga.name}</p>
+                          <p className="text-xs text-muted-foreground">{carga.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => toast.info("⚠️ Edição será processada via Edge Function.")}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => toast.info("⚠️ Exclusão será processada via Edge Function.")}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1.5">
+                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <Link2 className="w-3 h-3" />
+                          Webhook n8n
+                        </Label>
+                        {carga.webhookUrl ? (
+                          <code className="text-xs font-mono bg-muted/50 px-2 py-1.5 rounded block truncate">
+                            {carga.webhookUrl}
+                          </code>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Input placeholder="https://n8n.exemplo.com/webhook/..." className="text-xs h-8 font-mono" />
+                            <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => toast.info("⚠️ Webhook será salvo via Edge Function.")}>
+                              Vincular
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Status</Label>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              carga.webhookStatus === "connected"
+                                ? "status-badge-success"
+                                : carga.webhookStatus === "error"
+                                ? "status-badge-error"
+                                : "border-muted-foreground/30 text-muted-foreground"
+                            }`}
+                          >
+                            {carga.webhookStatus === "connected"
+                              ? "Conectado"
+                              : carga.webhookStatus === "error"
+                              ? "Erro"
+                              : "Desconectado"}
+                          </Badge>
+                          {carga.lastTriggered && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Último: {carga.lastTriggered}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  URLs de webhook são validadas e armazenadas via Edge Function. Cada disparo é registrado em audit_logs com tenant_id.
+                </p>
               </div>
             </Card>
           </TabsContent>
