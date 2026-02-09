@@ -27,9 +27,10 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    const token = authHeader.replace("Bearer ", "");
     const {
       data: { user: caller },
-    } = await callerClient.auth.getUser();
+    } = await callerClient.auth.getUser(token);
     if (!caller) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
