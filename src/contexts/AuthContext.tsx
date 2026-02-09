@@ -91,9 +91,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const fetchUserDataRef = React.useRef(fetchUserData);
+  fetchUserDataRef.current = fetchUserData;
+
   useEffect(() => {
     let isMounted = true;
-    let initialized = false;
 
     const initializeAuth = async () => {
       try {
@@ -107,29 +109,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await fetchUserData(session.user.id);
         }
       } finally {
-        if (isMounted) {
-          initialized = true;
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         if (!isMounted) return;
-        // Ignore events that fire before initial load completes
-        if (!initialized) return;
-
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        if (newSession?.user) {
-          fetchUserData(newSession.user.id);
-        } else {
+        if (!newSession?.user) {
           setProfile(null);
           setTenant(null);
           setRole(null);
           setPermissions([]);
         }
+        // fetchUserData is called explicitly in signIn, not here
+        // to avoid race conditions
       }
     );
 
@@ -142,7 +138,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error && data.session?.user) {
+      await fetchUserDataRef.current(data.session.user.id);
+    }
     return { error: error as Error | null };
   };
 
