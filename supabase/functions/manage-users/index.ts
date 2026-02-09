@@ -12,26 +12,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Validate caller is admin
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Validate caller auth
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const callerClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user: caller },
-    } = await callerClient.auth.getUser(token);
-    if (!caller) {
+
+    // Use admin client for all operations
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Verify user via admin client (bypasses JWT signing issues)
+    const { data: { user: caller }, error: authError } = await adminClient.auth.getUser(token);
+    if (authError || !caller) {
+      console.error("Auth error:", authError?.message);
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -39,11 +42,6 @@ Deno.serve(async (req) => {
     }
 
     // Check admin role
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
     const { data: roleData } = await adminClient
       .from("user_roles")
       .select("role")
@@ -115,7 +113,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // UPDATE USER (name, role, active status)
+    // UPDATE USER
     if (action === "update") {
       const { user_id, full_name, role, active } = payload;
 
