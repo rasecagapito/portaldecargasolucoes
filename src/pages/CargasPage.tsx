@@ -29,13 +29,13 @@ const availableCargas = [
   {
     id: "carga_02",
     name: "Impostos",
-    description: "Importa tipos de impostos",
+    description: "ealizar Carga de Parceiros de Itens",
     lastRun: "Hoje, 10:15",
     avgTime: "2min",
   },
   {
     id: "carga_03",
-    name: "Relatório Diário",
+    name: "Itens",
     description: "Gera relatórios consolidados",
     lastRun: "Ontem, 23:00",
     avgTime: "1min 30s",
