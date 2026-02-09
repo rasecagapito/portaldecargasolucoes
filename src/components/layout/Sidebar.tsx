@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,6 +10,7 @@ import {
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   label: string;
@@ -34,6 +34,7 @@ interface SidebarProps {
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { signOut } = useAuth();
 
   return (
     <aside
@@ -87,7 +88,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       {/* Bottom */}
       <div className="px-2 py-3 border-t border-sidebar-border space-y-1">
         <button
-          onClick={() => navigate("/")}
+          onClick={async () => { await signOut(); navigate("/"); }}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
           title={collapsed ? "Sair" : undefined}
         >

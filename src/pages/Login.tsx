@@ -1,26 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { signIn, session, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (session) navigate("/home", { replace: true });
+  }, [session, navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Mock login - will be replaced with Supabase Auth
-    setTimeout(() => {
-      setLoading(false);
-      navigate("/home");
-    }, 800);
+    const { error } = await signIn(email, password);
+    setLoading(false);
+    if (error) {
+      toast({
+        title: "Erro ao entrar",
+        description: "Email ou senha inválidos.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
