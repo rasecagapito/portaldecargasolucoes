@@ -24,9 +24,10 @@ const AccessDenied = () => {
 };
 
 const ProtectedRoute = ({ children, module }: ProtectedRouteProps) => {
-  const { session, loading, hasModuleAccess } = useAuth();
+  const { session, loading, hasModuleAccess, role } = useAuth();
 
-  if (loading) {
+  // Show loading while auth or user data is still being fetched
+  if (loading || (session && role === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
