@@ -35,15 +35,15 @@ const availableCargas = [
   },
   {
     id: "carga_03",
-    name: "Itens",
-    description: "Plano de Contas",
+    name: "Plano de Contas",
+    description: "Realizar Carga de Plano de Contas",
     lastRun: "Ontem, 23:00",
     avgTime: "1min 30s",
   },
   {
     id: "carga_04",
-    name: "Atualizar Preços",
-    description: "Atualiza tabela de preços por fornecedor",
+    name: "Codigo de Imposto",
+    description: "ARealizar Carga de Codigo de Imposto",
     lastRun: "3 dias atrás",
     avgTime: "30s",
   },
@@ -52,7 +52,7 @@ const availableCargas = [
 const executionHistory = [
   {
     id: "exec_001",
-    workflow: "Sync Estoque",
+    workflow: "Codigo de Imposto",
     status: "success",
     user: "João Silva",
     startedAt: "09/02/2026 14:30",
@@ -61,7 +61,7 @@ const executionHistory = [
   },
   {
     id: "exec_002",
-    workflow: "Importar NFs",
+    workflow: "Parceiro de Negocio",
     status: "running",
     user: "Maria Lopes",
     startedAt: "09/02/2026 14:25",
@@ -70,7 +70,7 @@ const executionHistory = [
   },
   {
     id: "exec_003",
-    workflow: "Relatório Diário",
+    workflow: "Itens",
     status: "error",
     user: "Admin",
     startedAt: "09/02/2026 14:18",
@@ -79,7 +79,7 @@ const executionHistory = [
   },
   {
     id: "exec_004",
-    workflow: "Atualizar Preços",
+    workflow: "Itens",
     status: "success",
     user: "Carlos R.",
     startedAt: "09/02/2026 14:05",
@@ -88,7 +88,7 @@ const executionHistory = [
   },
   {
     id: "exec_005",
-    workflow: "Sync Estoque",
+    workflow: "Plano de Contas",
     status: "queued",
     user: "Sistema",
     startedAt: "09/02/2026 14:00",
