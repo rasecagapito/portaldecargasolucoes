@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/home" },
   { label: "Cargas", icon: Truck, path: "/cargas" },
   { label: "Usuários", icon: Users, path: "/usuarios", adminOnly: true },
-  { label: "Configurações", icon: Settings, path: "/configuracoes" },
+  { label: "Configurações", icon: Settings, path: "/configuracoes", adminOnly: true },
 ];
 
 interface SidebarProps {
