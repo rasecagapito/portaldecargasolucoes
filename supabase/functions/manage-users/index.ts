@@ -6,6 +6,25 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function logAudit(
+  adminClient: ReturnType<typeof createClient>,
+  tenantId: string,
+  actorId: string,
+  action: string,
+  targetType: string,
+  targetId: string,
+  details: Record<string, unknown> = {}
+) {
+  await adminClient.from("audit_logs").insert({
+    tenant_id: tenantId,
+    actor_id: actorId,
+    action,
+    target_type: targetType,
+    target_id: targetId,
+    details,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -15,7 +34,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Validate caller auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -26,12 +44,10 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
 
-    // Use admin client for all operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Verify user via admin client (bypasses JWT signing issues)
     const { data: { user: caller }, error: authError } = await adminClient.auth.getUser(token);
     if (authError || !caller) {
       console.error("Auth error:", authError?.message);
@@ -107,6 +123,10 @@ Deno.serve(async (req) => {
         });
       }
 
+      await logAudit(adminClient, tenantId, caller.id, "user.created", "user", newUser.user?.id ?? "", {
+        email, full_name, role,
+      });
+
       return new Response(
         JSON.stringify({ success: true, user_id: newUser.user?.id }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -124,10 +144,18 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Block self-modification
+      if (user_id === caller.id) {
+        return new Response(
+          JSON.stringify({ error: "Operação não permitida. Você não pode alterar seu próprio status ou perfil." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Verify user belongs to same tenant
       const { data: targetProfile } = await adminClient
         .from("profiles")
-        .select("tenant_id")
+        .select("tenant_id, full_name, active")
         .eq("user_id", user_id)
         .single();
 
@@ -160,11 +188,37 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Get old role for audit
+        const { data: oldRole } = await adminClient
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user_id)
+          .eq("tenant_id", tenantId)
+          .single();
+
         await adminClient
           .from("user_roles")
           .update({ role })
           .eq("user_id", user_id)
           .eq("tenant_id", tenantId);
+
+        if (oldRole?.role !== role) {
+          await logAudit(adminClient, tenantId, caller.id, "role.updated", "user", user_id, {
+            old_role: oldRole?.role, new_role: role,
+          });
+        }
+      }
+
+      if (active !== undefined) {
+        await logAudit(adminClient, tenantId, caller.id, active ? "user.activated" : "user.deactivated", "user", user_id, {
+          full_name: targetProfile.full_name,
+        });
+      }
+
+      if (full_name !== undefined && full_name !== targetProfile.full_name) {
+        await logAudit(adminClient, tenantId, caller.id, "user.updated", "user", user_id, {
+          old_name: targetProfile.full_name, new_name: full_name,
+        });
       }
 
       return new Response(

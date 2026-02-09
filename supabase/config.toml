@@ -2,3 +2,6 @@ project_id = "kmunvgkwmdonygmldhgf"
 
 [functions.manage-users]
 verify_jwt = false
+
+[functions.manage-permissions]
+verify_jwt = false
