@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.change-password]
 verify_jwt = false
+
+[functions.dispatch-carga]
+verify_jwt = false
+
+[functions.carga-callback]
+verify_jwt = false

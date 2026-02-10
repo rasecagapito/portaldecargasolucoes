@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2 } from "lucide-react";
+import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,117 +7,266 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import AppLayout from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-const availableCargas = [
-  {
-    id: "carga_01",
-    name: "Parceiro de Negocio",
-    description: "Realizar Carga de Parceiros de Negocio",
-    lastRun: "Hoje, 14:30",
-    avgTime: "45s",
-  },
-  {
-    id: "carga_02",
-    name: "Tipo de Impostos",
-    description: "Realizar carga de Tipo de Impostos",
-    lastRun: "Hoje, 10:15",
-    avgTime: "2min",
-  },
-  {
-    id: "carga_03",
-    name: "Plano de Contas",
-    description: "Realizar Carga de Plano de Contas",
-    lastRun: "Ontem, 23:00",
-    avgTime: "1min 30s",
-  },
-  {
-    id: "carga_04",
-    name: "Codigo de Imposto",
-    description: "ARealizar Carga de Codigo de Imposto",
-    lastRun: "3 dias atrás",
-    avgTime: "30s",
-  },
-];
+interface Carga {
+  id: string;
+  name: string;
+  description: string | null;
+  webhook_url: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-const executionHistory = [
-  {
-    id: "exec_001",
-    workflow: "Codigo de Imposto",
-    status: "success",
-    user: "João Silva",
-    startedAt: "09/02/2026 14:30",
-    finishedAt: "09/02/2026 14:31",
-    duration: "45s",
-  },
-  {
-    id: "exec_002",
-    workflow: "Parceiro de Negocio",
-    status: "running",
-    user: "Maria Lopes",
-    startedAt: "09/02/2026 14:25",
-    finishedAt: "—",
-    duration: "5min+",
-  },
-  {
-    id: "exec_003",
-    workflow: "Itens",
-    status: "error",
-    user: "Admin",
-    startedAt: "09/02/2026 14:18",
-    finishedAt: "09/02/2026 14:19",
-    duration: "1min 02s",
-  },
-  {
-    id: "exec_004",
-    workflow: "Itens",
-    status: "success",
-    user: "Carlos R.",
-    startedAt: "09/02/2026 14:05",
-    finishedAt: "09/02/2026 14:05",
-    duration: "28s",
-  },
-  {
-    id: "exec_005",
-    workflow: "Plano de Contas",
-    status: "queued",
-    user: "Sistema",
-    startedAt: "09/02/2026 14:00",
-    finishedAt: "—",
-    duration: "—",
-  },
-];
+interface CargaExecution {
+  id: string;
+  carga_id: string;
+  status: string;
+  user_id: string;
+  params: unknown;
+  result: unknown;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  carga_name?: string;
+  user_name?: string;
+}
 
 const statusConfig: Record<string, { label: string; class: string; icon: React.ElementType }> = {
-  success: { label: "Sucesso", class: "status-badge-success", icon: CheckCircle2 },
-  running: { label: "Executando", class: "status-badge-running", icon: Loader2 },
-  error: { label: "Erro", class: "status-badge-error", icon: AlertTriangle },
-  queued: { label: "Na Fila", class: "status-badge-queued", icon: Clock },
+  success: { label: "Sucesso", class: "bg-status-success/10 text-[hsl(var(--status-success))]", icon: CheckCircle2 },
+  running: { label: "Executando", class: "bg-status-running/10 text-[hsl(var(--status-running))]", icon: Loader2 },
+  error: { label: "Erro", class: "bg-status-error/10 text-[hsl(var(--status-error))]", icon: AlertTriangle },
+  pending: { label: "Pendente", class: "bg-status-queued/10 text-[hsl(var(--status-queued))]", icon: Clock },
 };
 
 const CargasPage = () => {
+  const { session, isAdmin, canCreate } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [launchDialog, setLaunchDialog] = useState<string | null>(null);
   const [detailDialog, setDetailDialog] = useState<string | null>(null);
+  const [cargaFormDialog, setCargaFormDialog] = useState<Carga | null | "new">(null);
+  const [launchParams, setLaunchParams] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formWebhookUrl, setFormWebhookUrl] = useState("");
+  const [dispatching, setDispatching] = useState(false);
 
-  const selectedCarga = availableCargas.find((c) => c.id === launchDialog);
-  const selectedExec = executionHistory.find((e) => e.id === detailDialog);
+  // Fetch cargas
+  const { data: cargas = [], isLoading: loadingCargas } = useQuery({
+    queryKey: ["cargas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cargas")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data as Carga[];
+    },
+  });
+
+  // Fetch executions with polling for active ones
+  const { data: executions = [], isLoading: loadingExecs } = useQuery({
+    queryKey: ["carga_executions"],
+    queryFn: async () => {
+      const { data: execs, error } = await supabase
+        .from("carga_executions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+
+      // Enrich with carga name and user name
+      const cargaIds = [...new Set((execs || []).map((e: CargaExecution) => e.carga_id))];
+      const userIds = [...new Set((execs || []).map((e: CargaExecution) => e.user_id))];
+
+      const [cargasRes, profilesRes] = await Promise.all([
+        cargaIds.length > 0
+          ? supabase.from("cargas").select("id, name").in("id", cargaIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? supabase.from("profiles").select("user_id, full_name").in("user_id", userIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const cargaMap = Object.fromEntries((cargasRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
+      const userMap = Object.fromEntries((profilesRes.data || []).map((p: { user_id: string; full_name: string }) => [p.user_id, p.full_name]));
+
+      return (execs || []).map((e: CargaExecution) => ({
+        ...e,
+        carga_name: cargaMap[e.carga_id] || "—",
+        user_name: userMap[e.user_id] || "—",
+      })) as CargaExecution[];
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data as CargaExecution[] | undefined;
+      const hasActive = data?.some((e) => e.status === "pending" || e.status === "running");
+      return hasActive ? 5000 : false;
+    },
+  });
+
+  // Dispatch mutation
+  const dispatchMutation = useMutation({
+    mutationFn: async ({ cargaId, params }: { cargaId: string; params: Record<string, unknown> }) => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `https://kmunvgkwmdonygmldhgf.supabase.co/functions/v1/dispatch-carga`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentSession?.access_token}`,
+          },
+          body: JSON.stringify({ carga_id: cargaId, params }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao disparar carga");
+      return json;
+    },
+    onSuccess: (data) => {
+      toast.success("Carga disparada com sucesso!", { description: `Execução: ${data.execution_id.slice(0, 8)}...` });
+      queryClient.invalidateQueries({ queryKey: ["carga_executions"] });
+      setLaunchDialog(null);
+      setLaunchParams("");
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao disparar carga", { description: err.message });
+    },
+  });
+
+  // Save carga (create/update)
+  const saveCargaMutation = useMutation({
+    mutationFn: async (carga: { id?: string; name: string; description: string; webhook_url: string }) => {
+      if (carga.id) {
+        const { error } = await supabase.from("cargas").update({
+          name: carga.name,
+          description: carga.description,
+          webhook_url: carga.webhook_url,
+        }).eq("id", carga.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("cargas").insert({
+          name: carga.name,
+          description: carga.description,
+          webhook_url: carga.webhook_url,
+          tenant_id: (await supabase.rpc("get_user_tenant_id")).data,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Carga salva com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cargas"] });
+      setCargaFormDialog(null);
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao salvar carga", { description: err.message });
+    },
+  });
+
+  // Toggle active
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { error } = await supabase.from("cargas").update({ active }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cargas"] });
+    },
+  });
+
+  const handleDispatch = async () => {
+    if (!launchDialog) return;
+    setDispatching(true);
+    let params = {};
+    if (launchParams.trim()) {
+      try {
+        params = JSON.parse(launchParams);
+      } catch {
+        toast.error("JSON inválido nos parâmetros");
+        setDispatching(false);
+        return;
+      }
+    }
+    await dispatchMutation.mutateAsync({ cargaId: launchDialog, params });
+    setDispatching(false);
+  };
+
+  const openCargaForm = (carga?: Carga) => {
+    if (carga) {
+      setFormName(carga.name);
+      setFormDescription(carga.description || "");
+      setFormWebhookUrl(carga.webhook_url);
+      setCargaFormDialog(carga);
+    } else {
+      setFormName("");
+      setFormDescription("");
+      setFormWebhookUrl("");
+      setCargaFormDialog("new");
+    }
+  };
+
+  const handleSaveCarga = () => {
+    if (!formName.trim() || !formWebhookUrl.trim()) {
+      toast.error("Nome e URL do webhook são obrigatórios");
+      return;
+    }
+    const id = cargaFormDialog !== "new" ? (cargaFormDialog as Carga).id : undefined;
+    saveCargaMutation.mutate({ id, name: formName, description: formDescription, webhook_url: formWebhookUrl });
+  };
+
+  const activeCargas = cargas.filter((c) => c.active);
+  const selectedCarga = cargas.find((c) => c.id === launchDialog);
+  const selectedExec = executions.find((e) => e.id === detailDialog);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    try {
+      return format(new Date(dateStr), "dd/MM/yyyy HH:mm:ss", { locale: ptBR });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getDuration = (started: string | null, finished: string | null) => {
+    if (!started) return "—";
+    const start = new Date(started).getTime();
+    const end = finished ? new Date(finished).getTime() : Date.now();
+    const diff = Math.round((end - start) / 1000);
+    if (diff < 60) return `${diff}s`;
+    const min = Math.floor(diff / 60);
+    const sec = diff % 60;
+    return `${min}min ${sec}s`;
+  };
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Cargas</h1>
-          <p className="text-sm text-muted-foreground mt-1">Dispare e monitore execuções de cargas</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Cargas</h1>
+            <p className="text-sm text-muted-foreground mt-1">Dispare e monitore execuções de cargas</p>
+          </div>
+          {isAdmin && (
+            <Button className="gap-2" onClick={() => openCargaForm()}>
+              <Plus className="w-4 h-4" />
+              Nova Carga
+            </Button>
+          )}
         </div>
 
         <Tabs defaultValue="dispatch" className="space-y-4">
@@ -130,32 +279,48 @@ const CargasPage = () => {
               <Clock className="w-3.5 h-3.5" />
               Histórico
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="manage" className="gap-2">
+                <Pencil className="w-3.5 h-3.5" />
+                Gerenciar
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Dispatch Tab */}
           <TabsContent value="dispatch">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {availableCargas.map((carga) => (
-                <Card key={carga.id} className="border border-border hover:border-primary/30 transition-colors">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-sm font-semibold">{carga.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">{carga.description}</p>
+            {loadingCargas ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : activeCargas.length === 0 ? (
+              <Card className="border border-border">
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  Nenhuma carga ativa cadastrada.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeCargas.map((carga) => (
+                  <Card key={carga.id} className="border border-border hover:border-primary/30 transition-colors">
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-sm font-semibold">{carga.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">{carga.description || "Sem descrição"}</p>
+                        </div>
+                        {(isAdmin || canCreate("cargas")) && (
+                          <Button size="sm" className="gap-1.5 font-semibold" onClick={() => setLaunchDialog(carga.id)}>
+                            <Play className="w-3.5 h-3.5" />
+                            Executar
+                          </Button>
+                        )}
                       </div>
-                      <Button size="sm" className="gap-1.5 font-semibold" onClick={() => setLaunchDialog(carga.id)}>
-                        <Play className="w-3.5 h-3.5" />
-                        Executar
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>Última: {carga.lastRun}</span>
-                      <span>Tempo médio: {carga.avgTime}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* History Tab */}
@@ -176,81 +341,144 @@ const CargasPage = () => {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="pl-6">ID</TableHead>
-                      <TableHead>Workflow</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Usuário</TableHead>
-                      <TableHead>Início</TableHead>
-                      <TableHead>Duração</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {executionHistory
-                      .filter(
-                        (e) =>
-                          e.workflow.toLowerCase().includes(search.toLowerCase()) ||
-                          e.id.toLowerCase().includes(search.toLowerCase()),
-                      )
-                      .map((exec) => {
-                        const config = statusConfig[exec.status];
-                        return (
-                          <TableRow key={exec.id} className="cursor-pointer">
-                            <TableCell className="pl-6 font-mono text-xs">{exec.id}</TableCell>
-                            <TableCell className="text-sm font-medium">{exec.workflow}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className={`text-[11px] font-medium gap-1 ${config.class}`}>
-                                <config.icon className={`w-3 h-3 ${exec.status === "running" ? "animate-spin" : ""}`} />
-                                {config.label}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm">{exec.user}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{exec.startedAt}</TableCell>
-                            <TableCell className="text-sm font-mono">{exec.duration}</TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => setDetailDialog(exec.id)}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                  </TableBody>
-                </Table>
+                {loadingExecs ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="pl-6">ID</TableHead>
+                        <TableHead>Carga</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Usuário</TableHead>
+                        <TableHead>Início</TableHead>
+                        <TableHead>Duração</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {executions
+                        .filter((e) =>
+                          (e.carga_name || "").toLowerCase().includes(search.toLowerCase()) ||
+                          e.id.toLowerCase().includes(search.toLowerCase())
+                        )
+                        .map((exec) => {
+                          const config = statusConfig[exec.status] || statusConfig.pending;
+                          return (
+                            <TableRow key={exec.id} className="cursor-pointer">
+                              <TableCell className="pl-6 font-mono text-xs">{exec.id.slice(0, 8)}</TableCell>
+                              <TableCell className="text-sm font-medium">{exec.carga_name}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className={`text-[11px] font-medium gap-1 ${config.class}`}>
+                                  <config.icon className={`w-3 h-3 ${exec.status === "running" ? "animate-spin" : ""}`} />
+                                  {config.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{exec.user_name}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{formatDate(exec.started_at)}</TableCell>
+                              <TableCell className="text-sm font-mono">{getDuration(exec.started_at, exec.finished_at)}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailDialog(exec.id)}>
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      {executions.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            Nenhuma execução encontrada
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Manage Tab (admin only) */}
+          {isAdmin && (
+            <TabsContent value="manage">
+              <Card className="border border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Gerenciar Cargas</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="pl-6">Nome</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Webhook URL</TableHead>
+                        <TableHead>Ativa</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cargas.map((carga) => (
+                        <TableRow key={carga.id}>
+                          <TableCell className="pl-6 text-sm font-medium">{carga.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{carga.description || "—"}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground max-w-[200px] truncate">{carga.webhook_url}</TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={carga.active}
+                              onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: carga.id, active: checked })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCargaForm(carga)}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {cargas.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            Nenhuma carga cadastrada
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Launch Dialog */}
-        <Dialog open={!!launchDialog} onOpenChange={(open) => !open && setLaunchDialog(null)}>
+        <Dialog open={!!launchDialog} onOpenChange={(open) => { if (!open) { setLaunchDialog(null); setLaunchParams(""); } }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Executar: {selectedCarga?.name}</DialogTitle>
               <DialogDescription>
-                {selectedCarga?.description}. Configure os parâmetros antes de disparar.
+                {selectedCarga?.description || "Sem descrição"}. Configure os parâmetros antes de disparar.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Parâmetros (JSON)</Label>
-                <Textarea placeholder='{"key": "value"}' className="font-mono text-sm min-h-[100px]" />
+                <Textarea
+                  placeholder='{"key": "value"}'
+                  className="font-mono text-sm min-h-[100px]"
+                  value={launchParams}
+                  onChange={(e) => setLaunchParams(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setLaunchDialog(null)}>
+              <Button variant="outline" onClick={() => { setLaunchDialog(null); setLaunchParams(""); }}>
                 Cancelar
               </Button>
-              <Button className="gap-2 font-semibold" onClick={() => setLaunchDialog(null)}>
-                <Play className="w-4 h-4" />
+              <Button className="gap-2 font-semibold" onClick={handleDispatch} disabled={dispatching}>
+                {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 Disparar Carga
               </Button>
             </DialogFooter>
@@ -261,57 +489,81 @@ const CargasPage = () => {
         <Dialog open={!!detailDialog} onOpenChange={(open) => !open && setDetailDialog(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Execução: {selectedExec?.id}</DialogTitle>
-              <DialogDescription>Detalhes da execução de {selectedExec?.workflow}</DialogDescription>
+              <DialogTitle>Execução: {selectedExec?.id.slice(0, 8)}</DialogTitle>
+              <DialogDescription>Detalhes da execução de {selectedExec?.carga_name}</DialogDescription>
             </DialogHeader>
             {selectedExec && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Status</p>
-                    <Badge variant="secondary" className={`${statusConfig[selectedExec.status].class} gap-1`}>
-                      {statusConfig[selectedExec.status].label}
+                    <Badge variant="secondary" className={`${(statusConfig[selectedExec.status] || statusConfig.pending).class} gap-1`}>
+                      {(statusConfig[selectedExec.status] || statusConfig.pending).label}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Duração</p>
-                    <p className="font-mono">{selectedExec.duration}</p>
+                    <p className="font-mono">{getDuration(selectedExec.started_at, selectedExec.finished_at)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Usuário</p>
-                    <p>{selectedExec.user}</p>
+                    <p>{selectedExec.user_name}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Início</p>
-                    <p>{selectedExec.startedAt}</p>
+                    <p>{formatDate(selectedExec.started_at)}</p>
                   </div>
                 </div>
+
+                {selectedExec.error_message && (
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">Erro</p>
+                    <p className="text-sm text-[hsl(var(--status-error))] bg-destructive/10 rounded p-2 font-mono text-xs">{selectedExec.error_message}</p>
+                  </div>
+                )}
+
+                {selectedExec.result && (
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">Resultado</p>
+                    <pre className="text-xs font-mono bg-secondary rounded p-2 overflow-auto max-h-40">
+                      {JSON.stringify(selectedExec.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
                 <div>
                   <p className="text-muted-foreground text-xs mb-2">Timeline</p>
                   <div className="space-y-2 border-l-2 border-border pl-4 ml-1">
                     <div className="relative">
                       <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary" />
-                      <p className="text-sm font-medium">Carga iniciada</p>
-                      <p className="text-xs text-muted-foreground">{selectedExec.startedAt}</p>
+                      <p className="text-sm font-medium">Carga criada</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(selectedExec.created_at)}</p>
                     </div>
-                    <div className="relative">
-                      <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-status-success" />
-                      <p className="text-sm font-medium">Webhook enviado ao n8n</p>
-                      <p className="text-xs text-muted-foreground">Payload validado</p>
-                    </div>
+                    {selectedExec.started_at && (
+                      <div className="relative">
+                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary" />
+                        <p className="text-sm font-medium">Webhook enviado ao n8n</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(selectedExec.started_at)}</p>
+                      </div>
+                    )}
                     {selectedExec.status === "success" && (
                       <div className="relative">
-                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-status-success" />
+                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[hsl(var(--status-success))]" />
                         <p className="text-sm font-medium">Execução concluída</p>
-                        <p className="text-xs text-muted-foreground">{selectedExec.finishedAt}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(selectedExec.finished_at)}</p>
                       </div>
                     )}
                     {selectedExec.status === "error" && (
                       <div className="relative">
-                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-status-error" />
+                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[hsl(var(--status-error))]" />
                         <p className="text-sm font-medium">Erro na execução</p>
-                        <p className="text-xs text-muted-foreground">Timeout na resposta do ERP</p>
+                        <p className="text-xs text-muted-foreground">{selectedExec.error_message || formatDate(selectedExec.finished_at)}</p>
+                      </div>
+                    )}
+                    {(selectedExec.status === "running" || selectedExec.status === "pending") && (
+                      <div className="relative">
+                        <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[hsl(var(--status-running))] animate-pulse" />
+                        <p className="text-sm font-medium">Aguardando resposta...</p>
                       </div>
                     )}
                   </div>
@@ -319,9 +571,48 @@ const CargasPage = () => {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" className="gap-2" onClick={() => setDetailDialog(null)}>
-                <RotateCcw className="w-3.5 h-3.5" />
-                Re-executar
+              <Button variant="outline" onClick={() => setDetailDialog(null)}>
+                Fechar
+              </Button>
+              {selectedExec && (isAdmin || canCreate("cargas")) && (
+                <Button variant="outline" className="gap-2" onClick={() => {
+                  setDetailDialog(null);
+                  setLaunchDialog(selectedExec.carga_id);
+                }}>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Re-executar
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Carga Form Dialog (admin) */}
+        <Dialog open={!!cargaFormDialog} onOpenChange={(open) => !open && setCargaFormDialog(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{cargaFormDialog === "new" ? "Nova Carga" : "Editar Carga"}</DialogTitle>
+              <DialogDescription>Preencha os dados da carga para integração com n8n.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nome</Label>
+                <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ex: Parceiro de Negócio" />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Descrição da carga" />
+              </div>
+              <div className="space-y-2">
+                <Label>Webhook URL (n8n)</Label>
+                <Input value={formWebhookUrl} onChange={(e) => setFormWebhookUrl(e.target.value)} placeholder="https://n8n.example.com/webhook/..." className="font-mono text-sm" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCargaFormDialog(null)}>Cancelar</Button>
+              <Button onClick={handleSaveCarga} disabled={saveCargaMutation.isPending}>
+                {saveCargaMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Salvar
               </Button>
             </DialogFooter>
           </DialogContent>
