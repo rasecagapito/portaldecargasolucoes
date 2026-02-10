@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power } from "lucide-react";
+import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power, ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import AppLayout from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,19 +21,33 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+interface CargaItem {
+  id: string;
+  carga_id: string;
+  tenant_id: string;
+  name: string;
+  webhook_url: string;
+  active: boolean;
+  execution_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 interface Carga {
   id: string;
   name: string;
   description: string | null;
-  webhook_url: string;
+  webhook_url: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
+  items?: CargaItem[];
 }
 
 interface CargaExecution {
   id: string;
   carga_id: string;
+  carga_item_id: string | null;
   status: string;
   user_id: string;
   params: unknown;
@@ -42,6 +57,7 @@ interface CargaExecution {
   finished_at: string | null;
   created_at: string;
   carga_name?: string;
+  carga_item_name?: string;
   user_name?: string;
 }
 
@@ -56,29 +72,40 @@ const CargasPage = () => {
   const { session, isAdmin, canCreate } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [launchDialog, setLaunchDialog] = useState<string | null>(null);
+  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+  const [launchDialog, setLaunchDialog] = useState<{ itemId: string; itemName: string; cargaName: string } | null>(null);
   const [detailDialog, setDetailDialog] = useState<string | null>(null);
   const [cargaFormDialog, setCargaFormDialog] = useState<Carga | null | "new">(null);
   const [launchParams, setLaunchParams] = useState("");
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
-  const [formWebhookUrl, setFormWebhookUrl] = useState("");
+  const [formItems, setFormItems] = useState<Array<{ id?: string; name: string; webhook_url: string; active: boolean; execution_order: number }>>([]);
   const [dispatching, setDispatching] = useState(false);
 
-  // Fetch cargas
+  // Fetch cargas with items
   const { data: cargas = [], isLoading: loadingCargas } = useQuery({
     queryKey: ["cargas"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: cargasData, error } = await supabase
         .from("cargas")
         .select("*")
         .order("name");
       if (error) throw error;
-      return data as Carga[];
+
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("carga_items")
+        .select("*")
+        .order("execution_order");
+      if (itemsError) throw itemsError;
+
+      return (cargasData || []).map((c: Carga) => ({
+        ...c,
+        items: (itemsData || []).filter((i: CargaItem) => i.carga_id === c.id),
+      })) as Carga[];
     },
   });
 
-  // Fetch executions with polling for active ones
+  // Fetch executions with polling
   const { data: executions = [], isLoading: loadingExecs } = useQuery({
     queryKey: ["carga_executions"],
     queryFn: async () => {
@@ -89,25 +116,30 @@ const CargasPage = () => {
         .limit(100);
       if (error) throw error;
 
-      // Enrich with carga name and user name
       const cargaIds = [...new Set((execs || []).map((e: CargaExecution) => e.carga_id))];
       const userIds = [...new Set((execs || []).map((e: CargaExecution) => e.user_id))];
+      const itemIds = [...new Set((execs || []).filter((e: CargaExecution) => e.carga_item_id).map((e: CargaExecution) => e.carga_item_id!))];
 
-      const [cargasRes, profilesRes] = await Promise.all([
+      const [cargasRes, profilesRes, itemsRes] = await Promise.all([
         cargaIds.length > 0
           ? supabase.from("cargas").select("id, name").in("id", cargaIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
           ? supabase.from("profiles").select("user_id, full_name").in("user_id", userIds)
           : Promise.resolve({ data: [] }),
+        itemIds.length > 0
+          ? supabase.from("carga_items").select("id, name").in("id", itemIds)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const cargaMap = Object.fromEntries((cargasRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
       const userMap = Object.fromEntries((profilesRes.data || []).map((p: { user_id: string; full_name: string }) => [p.user_id, p.full_name]));
+      const itemMap = Object.fromEntries((itemsRes.data || []).map((i: { id: string; name: string }) => [i.id, i.name]));
 
       return (execs || []).map((e: CargaExecution) => ({
         ...e,
         carga_name: cargaMap[e.carga_id] || "—",
+        carga_item_name: e.carga_item_id ? (itemMap[e.carga_item_id] || "—") : null,
         user_name: userMap[e.user_id] || "—",
       })) as CargaExecution[];
     },
@@ -118,9 +150,9 @@ const CargasPage = () => {
     },
   });
 
-  // Dispatch mutation
+  // Dispatch mutation (now dispatches a carga_item)
   const dispatchMutation = useMutation({
-    mutationFn: async ({ cargaId, params }: { cargaId: string; params: Record<string, unknown> }) => {
+    mutationFn: async ({ cargaItemId, params }: { cargaItemId: string; params: Record<string, unknown> }) => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       const res = await fetch(
         `https://kmunvgkwmdonygmldhgf.supabase.co/functions/v1/dispatch-carga`,
@@ -130,7 +162,7 @@ const CargasPage = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${currentSession?.access_token}`,
           },
-          body: JSON.stringify({ carga_id: cargaId, params }),
+          body: JSON.stringify({ carga_item_id: cargaItemId, params }),
         }
       );
       const json = await res.json();
@@ -148,37 +180,78 @@ const CargasPage = () => {
     },
   });
 
-  // Save carga (create/update)
+  // Save carga module (create/update) with items
   const saveCargaMutation = useMutation({
-    mutationFn: async (carga: { id?: string; name: string; description: string; webhook_url: string }) => {
-      if (carga.id) {
+    mutationFn: async (carga: { id?: string; name: string; description: string; items: Array<{ id?: string; name: string; webhook_url: string; active: boolean; execution_order: number }> }) => {
+      const tenantId = (await supabase.rpc("get_user_tenant_id")).data;
+      let cargaId = carga.id;
+
+      if (cargaId) {
         const { error } = await supabase.from("cargas").update({
           name: carga.name,
           description: carga.description,
-          webhook_url: carga.webhook_url,
-        }).eq("id", carga.id);
+        }).eq("id", cargaId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("cargas").insert({
+        const { data, error } = await supabase.from("cargas").insert({
           name: carga.name,
           description: carga.description,
-          webhook_url: carga.webhook_url,
-          tenant_id: (await supabase.rpc("get_user_tenant_id")).data,
-        });
+          tenant_id: tenantId,
+        }).select("id").single();
         if (error) throw error;
+        cargaId = data.id;
+      }
+
+      // Get existing items for this carga
+      const { data: existingItems } = await supabase
+        .from("carga_items")
+        .select("id")
+        .eq("carga_id", cargaId);
+
+      const existingIds = new Set((existingItems || []).map((i: { id: string }) => i.id));
+      const submittedIds = new Set(carga.items.filter(i => i.id).map(i => i.id));
+
+      // Delete removed items
+      const toDelete = [...existingIds].filter(id => !submittedIds.has(id));
+      if (toDelete.length > 0) {
+        const { error } = await supabase.from("carga_items").delete().in("id", toDelete);
+        if (error) throw error;
+      }
+
+      // Upsert items
+      for (const item of carga.items) {
+        if (item.id) {
+          const { error } = await supabase.from("carga_items").update({
+            name: item.name,
+            webhook_url: item.webhook_url,
+            active: item.active,
+            execution_order: item.execution_order,
+          }).eq("id", item.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("carga_items").insert({
+            carga_id: cargaId,
+            tenant_id: tenantId,
+            name: item.name,
+            webhook_url: item.webhook_url,
+            active: item.active,
+            execution_order: item.execution_order,
+          });
+          if (error) throw error;
+        }
       }
     },
     onSuccess: () => {
-      toast.success("Carga salva com sucesso!");
+      toast.success("Módulo salvo com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["cargas"] });
       setCargaFormDialog(null);
     },
     onError: (err: Error) => {
-      toast.error("Erro ao salvar carga", { description: err.message });
+      toast.error("Erro ao salvar módulo", { description: err.message });
     },
   });
 
-  // Toggle active
+  // Toggle active (module level)
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       const { error } = await supabase.from("cargas").update({ active }).eq("id", id);
@@ -202,7 +275,7 @@ const CargasPage = () => {
         return;
       }
     }
-    await dispatchMutation.mutateAsync({ cargaId: launchDialog, params });
+    await dispatchMutation.mutateAsync({ cargaItemId: launchDialog.itemId, params });
     setDispatching(false);
   };
 
@@ -210,27 +283,56 @@ const CargasPage = () => {
     if (carga) {
       setFormName(carga.name);
       setFormDescription(carga.description || "");
-      setFormWebhookUrl(carga.webhook_url);
+      setFormItems(
+        (carga.items || []).map(i => ({
+          id: i.id,
+          name: i.name,
+          webhook_url: i.webhook_url,
+          active: i.active,
+          execution_order: i.execution_order,
+        }))
+      );
       setCargaFormDialog(carga);
     } else {
       setFormName("");
       setFormDescription("");
-      setFormWebhookUrl("");
+      setFormItems([]);
       setCargaFormDialog("new");
     }
   };
 
   const handleSaveCarga = () => {
-    if (!formName.trim() || !formWebhookUrl.trim()) {
-      toast.error("Nome e URL do webhook são obrigatórios");
+    if (!formName.trim()) {
+      toast.error("Nome do módulo é obrigatório");
+      return;
+    }
+    if (formItems.length > 0 && formItems.some(i => !i.name.trim() || !i.webhook_url.trim())) {
+      toast.error("Todos os itens devem ter nome e webhook URL");
       return;
     }
     const id = cargaFormDialog !== "new" ? (cargaFormDialog as Carga).id : undefined;
-    saveCargaMutation.mutate({ id, name: formName, description: formDescription, webhook_url: formWebhookUrl });
+    saveCargaMutation.mutate({ id, name: formName, description: formDescription, items: formItems });
+  };
+
+  const addFormItem = () => {
+    setFormItems([...formItems, { name: "", webhook_url: "", active: true, execution_order: formItems.length }]);
+  };
+
+  const updateFormItem = (index: number, field: string, value: unknown) => {
+    const updated = [...formItems];
+    (updated[index] as Record<string, unknown>)[field] = value;
+    setFormItems(updated);
+  };
+
+  const removeFormItem = (index: number) => {
+    setFormItems(formItems.filter((_, i) => i !== index).map((item, i) => ({ ...item, execution_order: i })));
+  };
+
+  const toggleModuleExpand = (cargaId: string) => {
+    setExpandedModules(prev => ({ ...prev, [cargaId]: !prev[cargaId] }));
   };
 
   const activeCargas = cargas.filter((c) => c.active);
-  const selectedCarga = cargas.find((c) => c.id === launchDialog);
   const selectedExec = executions.find((e) => e.id === detailDialog);
 
   const formatDate = (dateStr: string | null) => {
@@ -251,6 +353,12 @@ const CargasPage = () => {
     const min = Math.floor(diff / 60);
     const sec = diff % 60;
     return `${min}min ${sec}s`;
+  };
+
+  // Get latest status for each item in a module
+  const getItemLatestStatus = (itemId: string) => {
+    const exec = executions.find(e => e.carga_item_id === itemId);
+    return exec ? exec.status : null;
   };
 
   return (
@@ -300,25 +408,89 @@ const CargasPage = () => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeCargas.map((carga) => (
-                  <Card key={carga.id} className="border border-border hover:border-primary/30 transition-colors">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-sm font-semibold">{carga.name}</h3>
-                          <p className="text-xs text-muted-foreground mt-0.5">{carga.description || "Sem descrição"}</p>
+              <div className="grid grid-cols-1 gap-4">
+                {activeCargas.map((carga) => {
+                  const isExpanded = expandedModules[carga.id] || false;
+                  const activeItems = (carga.items || []).filter(i => i.active);
+                  return (
+                    <Card key={carga.id} className="border border-border hover:border-primary/30 transition-colors">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
+                            <button
+                              onClick={() => toggleModuleExpand(carga.id)}
+                              className="mt-0.5 p-1 rounded hover:bg-muted transition-colors"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+                            <div>
+                              <h3 className="text-sm font-semibold">{carga.name}</h3>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {carga.description || "Sem descrição"} · {activeItems.length} execuç{activeItems.length === 1 ? "ão" : "ões"}
+                              </p>
+                            </div>
+                          </div>
+                          {activeItems.length > 0 && (isAdmin || canCreate("cargas")) && (
+                            <Button
+                              size="sm"
+                              className="gap-1.5 font-semibold"
+                              onClick={() => toggleModuleExpand(carga.id)}
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                              Executar
+                            </Button>
+                          )}
                         </div>
-                        {(isAdmin || canCreate("cargas")) && (
-                          <Button size="sm" className="gap-1.5 font-semibold" onClick={() => setLaunchDialog(carga.id)}>
-                            <Play className="w-3.5 h-3.5" />
-                            Executar
-                          </Button>
+
+                        {isExpanded && (
+                          <div className="mt-4 space-y-2 pl-8">
+                            {activeItems.length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2">Nenhuma execução cadastrada neste módulo.</p>
+                            ) : (
+                              activeItems
+                                .sort((a, b) => a.execution_order - b.execution_order)
+                                .map((item) => {
+                                  const latestStatus = getItemLatestStatus(item.id);
+                                  const statusCfg = latestStatus ? statusConfig[latestStatus] : null;
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center justify-between p-3 rounded-md border border-border bg-muted/30"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm font-medium">{item.name}</span>
+                                        {statusCfg && (
+                                          <Badge variant="secondary" className={`text-[10px] gap-1 ${statusCfg.class}`}>
+                                            <statusCfg.icon className={`w-3 h-3 ${latestStatus === "running" ? "animate-spin" : ""}`} />
+                                            {statusCfg.label}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      {(isAdmin || canCreate("cargas")) && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="gap-1.5 text-xs"
+                                          onClick={() => setLaunchDialog({ itemId: item.id, itemName: item.name, cargaName: carga.name })}
+                                        >
+                                          <Play className="w-3 h-3" />
+                                          Executar
+                                        </Button>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -350,7 +522,8 @@ const CargasPage = () => {
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="pl-6">ID</TableHead>
-                        <TableHead>Carga</TableHead>
+                        <TableHead>Módulo</TableHead>
+                        <TableHead>Execução</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Usuário</TableHead>
                         <TableHead>Início</TableHead>
@@ -362,6 +535,7 @@ const CargasPage = () => {
                       {executions
                         .filter((e) =>
                           (e.carga_name || "").toLowerCase().includes(search.toLowerCase()) ||
+                          (e.carga_item_name || "").toLowerCase().includes(search.toLowerCase()) ||
                           e.id.toLowerCase().includes(search.toLowerCase())
                         )
                         .map((exec) => {
@@ -370,6 +544,7 @@ const CargasPage = () => {
                             <TableRow key={exec.id} className="cursor-pointer">
                               <TableCell className="pl-6 font-mono text-xs">{exec.id.slice(0, 8)}</TableCell>
                               <TableCell className="text-sm font-medium">{exec.carga_name}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{exec.carga_item_name || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant="secondary" className={`text-[11px] font-medium gap-1 ${config.class}`}>
                                   <config.icon className={`w-3 h-3 ${exec.status === "running" ? "animate-spin" : ""}`} />
@@ -389,7 +564,7 @@ const CargasPage = () => {
                         })}
                       {executions.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             Nenhuma execução encontrada
                           </TableCell>
                         </TableRow>
@@ -406,15 +581,15 @@ const CargasPage = () => {
             <TabsContent value="manage">
               <Card className="border border-border">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Gerenciar Cargas</CardTitle>
+                  <CardTitle className="text-base font-semibold">Gerenciar Módulos</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="pl-6">Nome</TableHead>
+                        <TableHead className="pl-6">Módulo</TableHead>
                         <TableHead>Descrição</TableHead>
-                        <TableHead>Webhook URL</TableHead>
+                        <TableHead>Execuções</TableHead>
                         <TableHead>Ativa</TableHead>
                         <TableHead className="w-10" />
                       </TableRow>
@@ -424,7 +599,11 @@ const CargasPage = () => {
                         <TableRow key={carga.id}>
                           <TableCell className="pl-6 text-sm font-medium">{carga.name}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{carga.description || "—"}</TableCell>
-                          <TableCell className="text-xs font-mono text-muted-foreground max-w-[200px] truncate">{carga.webhook_url}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-xs">
+                              {(carga.items || []).length} item(s)
+                            </Badge>
+                          </TableCell>
                           <TableCell>
                             <Switch
                               checked={carga.active}
@@ -441,7 +620,7 @@ const CargasPage = () => {
                       {cargas.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            Nenhuma carga cadastrada
+                            Nenhum módulo cadastrado
                           </TableCell>
                         </TableRow>
                       )}
@@ -453,13 +632,13 @@ const CargasPage = () => {
           )}
         </Tabs>
 
-        {/* Launch Dialog */}
+        {/* Launch Dialog (now for a specific item) */}
         <Dialog open={!!launchDialog} onOpenChange={(open) => { if (!open) { setLaunchDialog(null); setLaunchParams(""); } }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Executar: {selectedCarga?.name}</DialogTitle>
+              <DialogTitle>Executar: {launchDialog?.itemName}</DialogTitle>
               <DialogDescription>
-                {selectedCarga?.description || "Sem descrição"}. Configure os parâmetros antes de disparar.
+                Módulo: {launchDialog?.cargaName}. Configure os parâmetros antes de disparar.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -479,7 +658,7 @@ const CargasPage = () => {
               </Button>
               <Button className="gap-2 font-semibold" onClick={handleDispatch} disabled={dispatching}>
                 {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                Disparar Carga
+                Disparar
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -490,7 +669,9 @@ const CargasPage = () => {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Execução: {selectedExec?.id.slice(0, 8)}</DialogTitle>
-              <DialogDescription>Detalhes da execução de {selectedExec?.carga_name}</DialogDescription>
+              <DialogDescription>
+                {selectedExec?.carga_name}{selectedExec?.carga_item_name ? ` → ${selectedExec.carga_item_name}` : ""}
+              </DialogDescription>
             </DialogHeader>
             {selectedExec && (
               <div className="space-y-4">
@@ -574,10 +755,14 @@ const CargasPage = () => {
               <Button variant="outline" onClick={() => setDetailDialog(null)}>
                 Fechar
               </Button>
-              {selectedExec && (isAdmin || canCreate("cargas")) && (
+              {selectedExec && selectedExec.carga_item_id && (isAdmin || canCreate("cargas")) && (
                 <Button variant="outline" className="gap-2" onClick={() => {
-                  setDetailDialog(null);
-                  setLaunchDialog(selectedExec.carga_id);
+                  const item = cargas.flatMap(c => c.items || []).find(i => i.id === selectedExec.carga_item_id);
+                  const carga = cargas.find(c => c.id === selectedExec.carga_id);
+                  if (item && carga) {
+                    setDetailDialog(null);
+                    setLaunchDialog({ itemId: item.id, itemName: item.name, cargaName: carga.name });
+                  }
                 }}>
                   <RotateCcw className="w-3.5 h-3.5" />
                   Re-executar
@@ -587,25 +772,90 @@ const CargasPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Carga Form Dialog (admin) */}
+        {/* Module Form Dialog (admin) */}
         <Dialog open={!!cargaFormDialog} onOpenChange={(open) => !open && setCargaFormDialog(null)}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{cargaFormDialog === "new" ? "Nova Carga" : "Editar Carga"}</DialogTitle>
-              <DialogDescription>Preencha os dados da carga para integração com n8n.</DialogDescription>
+              <DialogTitle>{cargaFormDialog === "new" ? "Novo Módulo" : "Editar Módulo"}</DialogTitle>
+              <DialogDescription>Configure o módulo e suas execuções filhas.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome</Label>
-                <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ex: Parceiro de Negócio" />
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome do Módulo</Label>
+                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ex: Carga de Parceiro de Negócio" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Descrição do módulo" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Descrição</Label>
-                <Textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Descrição da carga" />
-              </div>
-              <div className="space-y-2">
-                <Label>Webhook URL (n8n)</Label>
-                <Input value={formWebhookUrl} onChange={(e) => setFormWebhookUrl(e.target.value)} placeholder="https://n8n.example.com/webhook/..." className="font-mono text-sm" />
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Execuções (Filhos)</Label>
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addFormItem}>
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar
+                  </Button>
+                </div>
+
+                {formItems.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-4 text-center">
+                    Nenhuma execução cadastrada. Clique em "Adicionar" para criar.
+                  </p>
+                )}
+
+                {formItems.map((item, index) => (
+                  <div key={index} className="border border-border rounded-md p-4 space-y-3 bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Execução #{index + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Ativa</Label>
+                          <Switch
+                            checked={item.active}
+                            onCheckedChange={(checked) => updateFormItem(index, "active", checked)}
+                          />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeFormItem(index)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nome</Label>
+                        <Input
+                          value={item.name}
+                          onChange={(e) => updateFormItem(index, "name", e.target.value)}
+                          placeholder="Ex: OCRD"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Ordem</Label>
+                        <Input
+                          type="number"
+                          value={item.execution_order}
+                          onChange={(e) => updateFormItem(index, "execution_order", parseInt(e.target.value) || 0)}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Webhook URL (n8n)</Label>
+                      <Input
+                        value={item.webhook_url}
+                        onChange={(e) => updateFormItem(index, "webhook_url", e.target.value)}
+                        placeholder="https://n8n.example.com/webhook/..."
+                        className="h-9 text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
             <DialogFooter>
