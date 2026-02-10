@@ -141,15 +141,19 @@ Deno.serve(async (req) => {
     try {
       const webhookResponse = await fetch(item.webhook_url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-Id": tenantId,
+          "X-Execution-Id": execution.id,
+        },
         body: JSON.stringify({
           execution_id: execution.id,
           tenant_id: tenantId,
-          carga_id: item.carga_id,
-          carga_item_id: item.id,
+          modulo_id: item.carga_id,
+          execucao_id: item.id,
           carga_name: parentCarga.name,
           carga_item_name: item.name,
-          params: params || {},
+          parametros: params || {},
           callback_url: callbackUrl,
         }),
       });
