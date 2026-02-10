@@ -58,6 +58,104 @@ export type Database = {
           },
         ]
       }
+      carga_executions: {
+        Row: {
+          carga_id: string
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          params: Json | null
+          result: Json | null
+          started_at: string | null
+          status: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          carga_id: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          params?: Json | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          carga_id?: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          params?: Json | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "carga_executions_carga_id_fkey"
+            columns: ["carga_id"]
+            isOneToOne: false
+            referencedRelation: "cargas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "carga_executions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cargas: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+          webhook_url: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+          webhook_url: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active: boolean
