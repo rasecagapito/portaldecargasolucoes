@@ -61,6 +61,7 @@ export type Database = {
       carga_executions: {
         Row: {
           carga_id: string
+          carga_item_id: string | null
           created_at: string
           error_message: string | null
           finished_at: string | null
@@ -74,6 +75,7 @@ export type Database = {
         }
         Insert: {
           carga_id: string
+          carga_item_id?: string | null
           created_at?: string
           error_message?: string | null
           finished_at?: string | null
@@ -87,6 +89,7 @@ export type Database = {
         }
         Update: {
           carga_id?: string
+          carga_item_id?: string | null
           created_at?: string
           error_message?: string | null
           finished_at?: string | null
@@ -107,7 +110,65 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "carga_executions_carga_item_id_fkey"
+            columns: ["carga_item_id"]
+            isOneToOne: false
+            referencedRelation: "carga_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "carga_executions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      carga_items: {
+        Row: {
+          active: boolean
+          carga_id: string
+          created_at: string
+          execution_order: number
+          id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+          webhook_url: string
+        }
+        Insert: {
+          active?: boolean
+          carga_id: string
+          created_at?: string
+          execution_order?: number
+          id?: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+          webhook_url: string
+        }
+        Update: {
+          active?: boolean
+          carga_id?: string
+          created_at?: string
+          execution_order?: number
+          id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "carga_items_carga_id_fkey"
+            columns: ["carga_id"]
+            isOneToOne: false
+            referencedRelation: "cargas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "carga_items_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -124,7 +185,7 @@ export type Database = {
           name: string
           tenant_id: string
           updated_at: string
-          webhook_url: string
+          webhook_url: string | null
         }
         Insert: {
           active?: boolean
@@ -134,7 +195,7 @@ export type Database = {
           name: string
           tenant_id: string
           updated_at?: string
-          webhook_url: string
+          webhook_url?: string | null
         }
         Update: {
           active?: boolean
@@ -144,7 +205,7 @@ export type Database = {
           name?: string
           tenant_id?: string
           updated_at?: string
-          webhook_url?: string
+          webhook_url?: string | null
         }
         Relationships: [
           {

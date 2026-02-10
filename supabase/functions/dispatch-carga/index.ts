@@ -66,43 +66,58 @@ Deno.serve(async (req) => {
     }
 
     const tenantId = callerProfile.tenant_id;
-    const { carga_id, params } = await req.json();
+    const { carga_item_id, params } = await req.json();
 
-    if (!carga_id) {
-      return new Response(JSON.stringify({ error: "carga_id é obrigatório" }), {
+    if (!carga_item_id) {
+      return new Response(JSON.stringify({ error: "carga_item_id é obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch carga and validate tenant
-    const { data: carga, error: cargaError } = await adminClient
-      .from("cargas")
-      .select("id, webhook_url, active, tenant_id, name")
-      .eq("id", carga_id)
+    // Fetch carga_item and validate tenant
+    const { data: item, error: itemError } = await adminClient
+      .from("carga_items")
+      .select("id, carga_id, webhook_url, active, tenant_id, name")
+      .eq("id", carga_item_id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
-    if (cargaError || !carga) {
-      return new Response(JSON.stringify({ error: "Carga não encontrada" }), {
+    if (itemError || !item) {
+      return new Response(JSON.stringify({ error: "Item de carga não encontrado" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (!carga.active) {
-      return new Response(JSON.stringify({ error: "Carga está desativada" }), {
+    if (!item.active) {
+      return new Response(JSON.stringify({ error: "Item de carga está desativado" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Create execution record with status pending
+    // Also check parent is active
+    const { data: parentCarga } = await adminClient
+      .from("cargas")
+      .select("id, active, name")
+      .eq("id", item.carga_id)
+      .maybeSingle();
+
+    if (!parentCarga || !parentCarga.active) {
+      return new Response(JSON.stringify({ error: "Módulo pai está desativado" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Create execution record
     const { data: execution, error: insertError } = await adminClient
       .from("carga_executions")
       .insert({
         tenant_id: tenantId,
-        carga_id: carga.id,
+        carga_id: item.carga_id,
+        carga_item_id: item.id,
         status: "pending",
         user_id: caller.id,
         params: params || {},
@@ -124,14 +139,16 @@ Deno.serve(async (req) => {
 
     // Send POST to n8n webhook
     try {
-      const webhookResponse = await fetch(carga.webhook_url, {
+      const webhookResponse = await fetch(item.webhook_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           execution_id: execution.id,
           tenant_id: tenantId,
-          carga_id: carga.id,
-          carga_name: carga.name,
+          carga_id: item.carga_id,
+          carga_item_id: item.id,
+          carga_name: parentCarga.name,
+          carga_item_name: item.name,
           params: params || {},
           callback_url: callbackUrl,
         }),
@@ -140,7 +157,6 @@ Deno.serve(async (req) => {
       if (!webhookResponse.ok) {
         const errorText = await webhookResponse.text();
         console.error("Webhook error:", errorText);
-        // Update execution to error
         await adminClient
           .from("carga_executions")
           .update({ status: "error", error_message: `Webhook retornou ${webhookResponse.status}: ${errorText}`, finished_at: new Date().toISOString() })
@@ -152,7 +168,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      await webhookResponse.text(); // consume body
+      await webhookResponse.text();
     } catch (fetchErr) {
       console.error("Fetch error:", (fetchErr as Error).message);
       await adminClient
