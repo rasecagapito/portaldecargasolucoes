@@ -80,7 +80,7 @@ const CargasPage = () => {
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formItems, setFormItems] = useState<Array<{ id?: string; name: string; webhook_url: string; active: boolean; execution_order: number }>>([]);
-  const [dispatching, setDispatching] = useState(false);
+  
 
   // Fetch cargas with items
   const { data: cargas = [], isLoading: loadingCargas } = useQuery({
@@ -264,19 +264,20 @@ const CargasPage = () => {
 
   const handleDispatch = async () => {
     if (!launchDialog) return;
-    setDispatching(true);
     let params = {};
     if (launchParams.trim()) {
       try {
         params = JSON.parse(launchParams);
       } catch {
         toast.error("JSON inválido nos parâmetros");
-        setDispatching(false);
         return;
       }
     }
-    await dispatchMutation.mutateAsync({ cargaItemId: launchDialog.itemId, params });
-    setDispatching(false);
+    try {
+      await dispatchMutation.mutateAsync({ cargaItemId: launchDialog.itemId, params });
+    } catch {
+      // error handled by onError callback — modal stays open
+    }
   };
 
   const openCargaForm = (carga?: Carga) => {
@@ -656,8 +657,8 @@ const CargasPage = () => {
               <Button variant="outline" onClick={() => { setLaunchDialog(null); setLaunchParams(""); }}>
                 Cancelar
               </Button>
-              <Button className="gap-2 font-semibold" onClick={handleDispatch} disabled={dispatching}>
-                {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              <Button className="gap-2 font-semibold" onClick={handleDispatch} disabled={dispatchMutation.isPending}>
+                {dispatchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 Disparar
               </Button>
             </DialogFooter>
