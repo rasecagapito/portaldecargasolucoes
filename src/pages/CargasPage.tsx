@@ -645,12 +645,18 @@ const CargasPage = () => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Parâmetros (JSON)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Informe os dados que serão enviados ao workflow do n8n em formato JSON. Esses parâmetros serão recebidos como variáveis no fluxo de automação.
+                </p>
                 <Textarea
-                  placeholder='{"key": "value"}'
-                  className="font-mono text-sm min-h-[100px]"
+                  placeholder={'{\n  "data_inicio": "2026-01-01",\n  "data_fim": "2026-01-31",\n  "tipo": "completa"\n}'}
+                  className="font-mono text-sm min-h-[120px]"
                   value={launchParams}
                   onChange={(e) => setLaunchParams(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground italic">
+                  Deixe vazio para executar sem parâmetros. O campo deve conter um JSON válido (ex: chaves entre aspas duplas).
+                </p>
               </div>
             </div>
             <DialogFooter>
