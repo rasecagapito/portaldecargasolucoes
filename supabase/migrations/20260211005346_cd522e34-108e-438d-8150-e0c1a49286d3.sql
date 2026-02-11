@@ -1,0 +1,2 @@
+ALTER TABLE public.carga_executions DROP CONSTRAINT IF EXISTS carga_executions_status_check;
+ALTER TABLE public.carga_executions ADD CONSTRAINT carga_executions_status_check CHECK (status IN ('pending', 'running', 'success', 'error', 'cancelled'));
