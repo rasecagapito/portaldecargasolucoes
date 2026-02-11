@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power, ChevronDown, ChevronRight, Trash2, GripVertical } from "lucide-react";
+import { XCircle, StopCircle } from "lucide-react";
+import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power, ChevronDown, ChevronRight, Trash2, GripVertical, Ban } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,7 @@ const statusConfig: Record<string, { label: string; class: string; icon: React.E
   running: { label: "Executando", class: "bg-status-running/10 text-[hsl(var(--status-running))]", icon: Loader2 },
   error: { label: "Erro", class: "bg-status-error/10 text-[hsl(var(--status-error))]", icon: AlertTriangle },
   pending: { label: "Pendente", class: "bg-status-queued/10 text-[hsl(var(--status-queued))]", icon: Clock },
+  cancelled: { label: "Cancelada", class: "bg-muted text-muted-foreground", icon: Ban },
 };
 
 const CargasPage = () => {
@@ -177,6 +179,34 @@ const CargasPage = () => {
     },
     onError: (err: Error) => {
       toast.error("Erro ao disparar carga", { description: err.message });
+    },
+  });
+
+  // Cancel execution mutation
+  const cancelMutation = useMutation({
+    mutationFn: async (executionId: string) => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `https://kmunvgkwmdonygmldhgf.supabase.co/functions/v1/cancel-carga`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentSession?.access_token}`,
+          },
+          body: JSON.stringify({ execution_id: executionId }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao cancelar execução");
+      return json;
+    },
+    onSuccess: () => {
+      toast.success("Execução cancelada com sucesso");
+      queryClient.invalidateQueries({ queryKey: ["carga_executions"] });
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao cancelar execução", { description: err.message });
     },
   });
 
@@ -333,6 +363,11 @@ const CargasPage = () => {
     setExpandedModules(prev => ({ ...prev, [cargaId]: !prev[cargaId] }));
   };
 
+  // Get active execution id for an item (pending or running)
+  const getItemActiveExecution = (itemId: string) => {
+    return executions.find(e => e.carga_item_id === itemId && (e.status === "pending" || e.status === "running"));
+  };
+
   const activeCargas = cargas.filter((c) => c.active);
   const selectedExec = executions.find((e) => e.id === detailDialog);
 
@@ -457,6 +492,7 @@ const CargasPage = () => {
                                 .map((item) => {
                                   const latestStatus = getItemLatestStatus(item.id);
                                   const statusCfg = latestStatus ? statusConfig[latestStatus] : null;
+                                  const activeExec = getItemActiveExecution(item.id);
                                   return (
                                     <div
                                       key={item.id}
@@ -471,17 +507,31 @@ const CargasPage = () => {
                                           </Badge>
                                         )}
                                       </div>
-                                      {(isAdmin || canCreate("cargas")) && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="gap-1.5 text-xs"
-                                          onClick={() => setLaunchDialog({ itemId: item.id, itemName: item.name, cargaName: carga.name })}
-                                        >
-                                          <Play className="w-3 h-3" />
-                                          Executar
-                                        </Button>
-                                      )}
+                                      <div className="flex items-center gap-2">
+                                        {activeExec && (isAdmin || canCreate("cargas")) && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                            onClick={() => cancelMutation.mutate(activeExec.id)}
+                                            disabled={cancelMutation.isPending}
+                                          >
+                                            {cancelMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <StopCircle className="w-3 h-3" />}
+                                            Parar
+                                          </Button>
+                                        )}
+                                        {(isAdmin || canCreate("cargas")) && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5 text-xs"
+                                            onClick={() => setLaunchDialog({ itemId: item.id, itemName: item.name, cargaName: carga.name })}
+                                          >
+                                            <Play className="w-3 h-3" />
+                                            Executar
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   );
                                 })
@@ -556,9 +606,23 @@ const CargasPage = () => {
                               <TableCell className="text-sm text-muted-foreground">{formatDate(exec.started_at)}</TableCell>
                               <TableCell className="text-sm font-mono">{getDuration(exec.started_at, exec.finished_at)}</TableCell>
                               <TableCell>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailDialog(exec.id)}>
-                                  <Eye className="w-4 h-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  {(exec.status === "pending" || exec.status === "running") && (isAdmin || canCreate("cargas")) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => cancelMutation.mutate(exec.id)}
+                                      disabled={cancelMutation.isPending}
+                                      title="Parar execução"
+                                    >
+                                      <StopCircle className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailDialog(exec.id)}>
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
