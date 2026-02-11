@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.carga-callback]
 verify_jwt = false
+
+[functions.cancel-carga]
+verify_jwt = false
