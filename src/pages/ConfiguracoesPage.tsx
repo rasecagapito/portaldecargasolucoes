@@ -43,6 +43,7 @@ import {
   Webhook,
   Users,
   Loader2,
+  Server,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -158,6 +159,15 @@ interface RoleModuleRow {
   can_delete: boolean;
 }
 
+interface SAPConfig {
+  id?: string;
+  sap_url: string;
+  sap_company_db: string;
+  sap_user: string;
+  sap_password?: string;
+  active: boolean;
+}
+
 const ConfiguracoesPage = () => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -241,6 +251,90 @@ const ConfiguracoesPage = () => {
     return roleModules.find((rm) => rm.role === role && rm.module === module);
   };
 
+  /* ────── SAP Configuration Logic ────── */
+  const isAdmin = profile?.role === "admin";
+  const [sapFormData, setSapFormData] = useState<SAPConfig>({
+    sap_url: "",
+    sap_company_db: "",
+    sap_user: "",
+    active: true,
+  });
+
+  // Fetch SAP Config
+  const { data: sapConfig, isLoading: loadingSAP } = useQuery({
+    queryKey: ["tenant-sap-config"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_sap_configs")
+        .select("*")
+        .single();
+
+      if (error && error.code !== "PGRST116") throw error; // PGRST116 is "not found"
+      return data as SAPConfig | null;
+    },
+    enabled: !!profile,
+  });
+
+  // Sync query data to local state
+  useEffect(() => {
+    if (sapConfig) {
+      setSapFormData({
+        sap_url: sapConfig.sap_url || "",
+        sap_company_db: sapConfig.sap_company_db || "",
+        sap_user: sapConfig.sap_user || "",
+        active: sapConfig.active ?? true,
+        sap_password: "", // Keep password empty by default
+      });
+    }
+  }, [sapConfig]);
+
+  const sapMutation = useMutation({
+    mutationFn: async (newData: SAPConfig) => {
+      const payload: any = { ...newData };
+      // Remove password if empty to avoid overwriting with empty string
+      if (!payload.sap_password) {
+        delete payload.sap_password;
+      }
+
+      if (sapConfig?.id) {
+        const { error } = await supabase
+          .from("tenant_sap_configs")
+          .update(payload)
+          .eq("id", sapConfig.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("tenant_sap_configs")
+          .insert([{ ...payload, tenant_id: profile?.tenant_id }]);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenant-sap-config"] });
+      toast.success("Configuração SAP salva com sucesso");
+    },
+    onError: (err: any) => {
+      toast.error("Erro ao salvar configuração SAP: " + err.message);
+    },
+  });
+
+  const handleTestConnection = () => {
+    toast.promise(
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+      {
+        loading: "Testando conexão com o SAP Service Layer...",
+        success: "Conexão estabelecida com sucesso! (Ambiente Mock)",
+        error: "Erro ao conectar ao SAP.",
+      }
+    );
+  };
+
+  const handleSaveSAP = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    sapMutation.mutate(sapFormData);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -284,6 +378,10 @@ const ConfiguracoesPage = () => {
             <TabsTrigger value="seguranca" className="gap-1.5 text-xs">
               <ShieldCheck className="w-3.5 h-3.5" />
               Segurança
+            </TabsTrigger>
+            <TabsTrigger value="sap" className="gap-1.5 text-xs">
+              <Server className="w-3.5 h-3.5" />
+              SAP
             </TabsTrigger>
             <TabsTrigger value="cargas" className="gap-1.5 text-xs">
               <Truck className="w-3.5 h-3.5" />
@@ -539,6 +637,116 @@ const ConfiguracoesPage = () => {
             </Card>
           </TabsContent>
 
+          {/* ─── CONFIGURAÇÃO SAP ─── */}
+          <TabsContent value="sap" className="space-y-4">
+            <Card className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Configuração SAP Service Layer</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Defina os parâmetros de conexão do Service Layer para este tenant.
+                  </p>
+                </div>
+                {!isAdmin && (
+                  <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground border-dashed">
+                    <Lock className="w-3 h-3" />
+                    Somente Leitura
+                  </Badge>
+                )}
+              </div>
+
+              {loadingSAP ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <form onSubmit={handleSaveSAP} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">URL do Service Layer</Label>
+                      <Input
+                        placeholder="https://servidor:50000"
+                        value={sapFormData.sap_url}
+                        onChange={(e) => setSapFormData({ ...sapFormData, sap_url: e.target.value })}
+                        disabled={!isAdmin}
+                        className={!isAdmin ? "bg-muted/50" : ""}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Company DB</Label>
+                      <Input
+                        placeholder="SBO_COMPANY_PRD"
+                        value={sapFormData.sap_company_db}
+                        onChange={(e) => setSapFormData({ ...sapFormData, sap_company_db: e.target.value })}
+                        disabled={!isAdmin}
+                        className={!isAdmin ? "bg-muted/50" : ""}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Usuário do Service Layer</Label>
+                      <Input
+                        placeholder="manager"
+                        value={sapFormData.sap_user}
+                        onChange={(e) => setSapFormData({ ...sapFormData, sap_user: e.target.value })}
+                        disabled={!isAdmin}
+                        className={!isAdmin ? "bg-muted/50" : ""}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Senha</Label>
+                      <Input
+                        type="password"
+                        placeholder="Digite nova senha para alterar"
+                        value={sapFormData.sap_password || ""}
+                        onChange={(e) => setSapFormData({ ...sapFormData, sap_password: e.target.value })}
+                        disabled={!isAdmin}
+                        className={!isAdmin ? "bg-muted/50" : ""}
+                      />
+                      <p className="text-[10px] text-muted-foreground italic">
+                        * A senha atual não é exibida por segurança. Preencha apenas se desejar alterá-la.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={sapFormData.active}
+                        onCheckedChange={(val) => setSapFormData({ ...sapFormData, active: val })}
+                        disabled={!isAdmin}
+                      />
+                      <Label className="text-xs">Integração Ativa</Label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8"
+                        onClick={handleTestConnection}
+                      >
+                        <Webhook className="w-3.5 h-3.5 mr-1.5" />
+                        Testar Conexão
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="text-xs h-8"
+                          disabled={sapMutation.isPending}
+                        >
+                          {sapMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
+                          Salvar Configurações
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </form>
+              )}
+            </Card>
+          </TabsContent>
+
           {/* ─── CARGAS ─── */}
           <TabsContent value="cargas" className="space-y-4">
             <Card className="p-6 space-y-6">
@@ -607,19 +815,18 @@ const ConfiguracoesPage = () => {
                         <div className="flex items-center gap-2">
                           <Badge
                             variant="outline"
-                            className={`text-[10px] ${
-                              carga.webhookStatus === "connected"
-                                ? "status-badge-success"
-                                : carga.webhookStatus === "error"
+                            className={`text-[10px] ${carga.webhookStatus === "connected"
+                              ? "status-badge-success"
+                              : carga.webhookStatus === "error"
                                 ? "status-badge-error"
                                 : "border-muted-foreground/30 text-muted-foreground"
-                            }`}
+                              }`}
                           >
                             {carga.webhookStatus === "connected"
                               ? "Conectado"
                               : carga.webhookStatus === "error"
-                              ? "Erro"
-                              : "Desconectado"}
+                                ? "Erro"
+                                : "Desconectado"}
                           </Badge>
                           {carga.lastTriggered && (
                             <span className="text-[10px] text-muted-foreground">
