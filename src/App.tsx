@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import UsersPage from "./pages/UsersPage";
 import CargasPage from "./pages/CargasPage";
+import ClientesPage from "./pages/ClientesPage";
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
 import NotFound from "./pages/NotFound";
 
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/home" element={<ProtectedRoute module="dashboard"><Home /></ProtectedRoute>} />
             <Route path="/usuarios" element={<ProtectedRoute module="usuarios"><UsersPage /></ProtectedRoute>} />
+            <Route path="/clientes" element={<ProtectedRoute module="configuracoes"><ClientesPage /></ProtectedRoute>} />
             <Route path="/cargas" element={<ProtectedRoute module="cargas"><CargasPage /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute module="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

@@ -75,6 +75,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 1. Fetch SAP config for this tenant (NEW)
+    const { data: sapConfig, error: sapError } = await adminClient
+      .rpc('get_decrypted_sap_config', {
+        p_tenant_id: tenantId,
+        p_master_key: Deno.env.get("SAP_MASTER_KEY") || ""
+      })
+      .maybeSingle();
+
+    if (sapError || !sapConfig) {
+      console.error("SAP Config error:", sapError?.message);
+      return new Response(JSON.stringify({ error: "Configuração SAP não encontrada ou inativa para este tenant" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch carga_item and validate tenant
     const { data: item, error: itemError } = await adminClient
       .from("carga_items")
@@ -155,6 +171,11 @@ Deno.serve(async (req) => {
           carga_item_name: item.name,
           parametros: params || {},
           callback_url: callbackUrl,
+          // Injected SAP credentials for n8n dynamic mapping (Phase 4/5)
+          sap_url: sapConfig.sap_url,
+          sap_company_db: sapConfig.sap_company_db,
+          sap_user: sapConfig.sap_user,
+          sap_password: sapConfig.decrypted_password,
         }),
       });
 

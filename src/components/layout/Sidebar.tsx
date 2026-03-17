@@ -22,6 +22,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/home", module: "dashboard" },
   { label: "Cargas", icon: Truck, path: "/cargas", module: "cargas" },
+  { label: "Clientes", icon: Users, path: "/clientes", module: "configuracoes" },
   { label: "Usuários", icon: Users, path: "/usuarios", module: "usuarios" },
   { label: "Configurações", icon: Settings, path: "/configuracoes", module: "configuracoes" },
 ];

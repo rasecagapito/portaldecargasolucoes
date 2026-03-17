@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); mcps=d.get\\(''mcpServers'', {}\\); print\\(json.dumps\\(mcps, indent=2\\)\\)\")",
+      "Bash(python:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\(''mcpServers'', {}\\), indent=2\\)\\)\")",
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Read(///note-aga/Cesar Agapito/Pessoal/44-IA/Antigravity/Projetos/Projetos/central-projetos/projetos/Portal de Automação B1/portalsolucoes-master/src/**)",
+      "Bash(npx -y n8n-mcp --version 2>&1 | head -5)"
+    ]
+  }
+}

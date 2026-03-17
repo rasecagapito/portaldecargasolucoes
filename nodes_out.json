@@ -1,0 +1,252 @@
+[
+  {
+    "parameters": {
+      "assignments": {
+        "assignments": [
+          {
+            "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+            "name": "TaxId1",
+            "type": "string",
+            "value": "={{ (() => {     const b = ($json.body || {});    const uf = b.uf || '';    const ies = Array.isArray(b.inscricoes_estaduais) ? b.inscricoes_estaduais : [];    const iesUF = uf ? ies.filter(x => x && String(x.estado) === uf) : ies;    const ativo = iesUF.find(x => x && x.ativo === true && String(x.inscricao_estadual || '').length > 0);    if (ativo && ativo.inscricao_estadual) return String(ativo.inscricao_estadual);    const isento = iesUF.find(x => x && x.isento === true);    return isento ? 'ISENTO' : '';  })() }}"
+          }
+        ]
+      },
+      "options": {}
+    },
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 3.4,
+    "position": [
+      -2640,
+      4160
+    ],
+    "id": "74ebb7d4-8467-4581-8b24-175e6928990b",
+    "name": "Montar CRD7 - Contábil"
+  },
+  {
+    "parameters": {
+      "conditions": {
+        "options": {
+          "version": 2,
+          "leftValue": "",
+          "caseSensitive": true,
+          "typeValidation": "strict"
+        },
+        "conditions": [
+          {
+            "id": "99cf51e5-da56-419d-bd94-16493c5f556d",
+            "leftValue": "",
+            "rightValue": "",
+            "operator": {
+              "type": "string",
+              "operation": "equals",
+              "name": "filter.operator.equals"
+            }
+          }
+        ],
+        "combinator": "and"
+      },
+      "options": {}
+    },
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2.2,
+    "position": [
+      -608,
+      3744
+    ],
+    "id": "a68de385-e543-4808-aedc-90a5b56df6ef",
+    "name": "CRD7 • Validar Dados Fiscais"
+  },
+  {
+    "parameters": {
+      "assignments": {
+        "assignments": [
+          {
+            "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+            "name": "TaxId1",
+            "type": "string",
+            "value": "={{ (() => {     const b = ($json.body || {});    const uf = b.uf || '';    const ies = Array.isArray(b.inscricoes_estaduais) ? b.inscricoes_estaduais : [];    const iesUF = uf ? ies.filter(x => x && String(x.estado) === uf) : ies;    const ativo = iesUF.find(x => x && x.ativo === true && String(x.inscricao_estadual || '').length > 0);    if (ativo && ativo.inscricao_estadual) return String(ativo.inscricao_estadual);    const isento = iesUF.find(x => x && x.isento === true);    return isento ? 'ISENTO' : '';  })() }}"
+          }
+        ]
+      },
+      "options": {}
+    },
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 3.4,
+    "position": [
+      -2640,
+      4336
+    ],
+    "id": "b50134af-88fb-45b6-a3ff-b57776422104",
+    "name": "Montar CRD7 - Cobranca"
+  },
+  {
+    "parameters": {
+      "assignments": {
+        "assignments": [
+          {
+            "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+            "name": "TaxId1",
+            "type": "string",
+            "value": "={{ (() => {     const b = ($json.body || {});    const uf = b.uf || '';    const ies = Array.isArray(b.inscricoes_estaduais) ? b.inscricoes_estaduais : [];    const iesUF = uf ? ies.filter(x => x && String(x.estado) === uf) : ies;    const ativo = iesUF.find(x => x && x.ativo === true && String(x.inscricao_estadual || '').length > 0);    if (ativo && ativo.inscricao_estadual) return String(ativo.inscricao_estadual);    const isento = iesUF.find(x => x && x.isento === true);    return isento ? 'ISENTO' : '';  })() }}"
+          }
+        ]
+      },
+      "options": {}
+    },
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 3.4,
+    "position": [
+      -2640,
+      4512
+    ],
+    "id": "979299f3-fed7-4b5a-bc56-745f48a10790",
+    "name": "Montar CRD7 - Entrega"
+  },
+  {
+    "parameters": {
+      "numberInputs": 3
+    },
+    "type": "n8n-nodes-base.merge",
+    "typeVersion": 3.2,
+    "position": [
+      -2272,
+      4320
+    ],
+    "id": "c3dd5ae5-d4d4-45ef-aea8-8cbaf1fac2c4",
+    "name": "CRD7 • Merge (C+B+S)"
+  },
+  {
+    "parameters": {
+      "jsCode": "// Agrupa linhas CRD7 por ParentKey e remove duplicidade ParentKey+LineNum (E09)\n// n8n Code - runOnceForAllItems\n\nconst items = $input.all();\nconst map = new Map();\n\nfor (const { json: j } of items) {\n  const key = String(j.ParentKey ?? j.CardCode ?? '').trim();\n  if (!key) continue;\n\n  if (!map.has(key)) {\n    map.set(key, { ParentKey: key, CRD7: [] });\n  }\n\n  const lineNumStr = String(j.LineNum ?? '');\n  const bucket = map.get(key).CRD7;\n\n  // evita duplicidade ParentKey+LineNum\n  const exists = bucket.find(x => String(x.LineNum) === lineNumStr);\n  if (!exists) {\n    bucket.push({\n      LineNum: lineNumStr,\n      Address: String(j.Address ?? ''),\n      CNAECode: String(j.CNAEAbsId ?? ''),\n      TaxId0: String(j.TaxId0 ?? ''),\n      TaxId1: String(j.TaxId1 ?? ''),\n      TaxId3: String(j.TaxId3 ?? ''),\n      TaxId4: String(j.TaxId4 ?? ''),\n      TaxId7: String(j.TaxId7 ?? ''),\n      TaxId8: String(j.TaxId8 ?? ''),\n    });\n  }\n}\n\nreturn Array.from(map.values()).map(x => ({ json: x }));\n"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      -272,
+      3728
+    ],
+    "id": "a995b526-9524-4d66-9406-62c4fa085bf1",
+    "name": "CRD7 • Agrupar por CardCode (Code)"
+  },
+  {
+    "parameters": {
+      "mode": "runOnceForEachItem",
+      "jsCode": "// Prepara chave de merge e saneia a coleção CRD7\n// n8n Code - runOnceForEachItem\n\nfunction onlyDigits(s){ return String(s ?? '').replace(/\\D/g,''); }\nfunction normalizeAddress(a){\n  const v = String(a ?? '');\n  if (v.toLowerCase() === 'cobrança') return 'Cobranca';\n  return v;\n}\n\nconst json = $json;\nconst key = String(json.ParentKey || json.CardCode || '').trim();\nconst rows = Array.isArray(json.CRD7) ? json.CRD7.map(r => {\n  return {\n    LineNum : String(r.LineNum || ''),\n    Address : normalizeAddress(r.Address),\n    CNAECode: onlyDigits(r.CNAECode),\n    TaxId0  : String(r.TaxId0 || ''),\n    TaxId1  : String(r.TaxId1 || '').trim(),\n    TaxId3  : String(r.TaxId3 || '').trim(),\n    TaxId4  : onlyDigits(r.TaxId4 || ''),\n    TaxId7  : String(r.TaxId7 || '').trim(),\n    TaxId8  : String(r.TaxId8 || '').trim(),\n  };\n}) : [];\n\nreturn {\n  ParentKey: key,\n  CardCode : key,\n  CRD7     : rows\n};\n"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      32,
+      3728
+    ],
+    "id": "7fbb0ac9-2828-483d-a92f-cc8ad1f3f7c7",
+    "name": "CRD7 • Preparar chave + Sanear (Code)"
+  },
+  {
+    "parameters": {
+      "mode": "combine",
+      "fieldsToMatchString": "CardCode",
+      "options": {}
+    },
+    "type": "n8n-nodes-base.merge",
+    "typeVersion": 3.2,
+    "position": [
+      416,
+      3712
+    ],
+    "id": "f2485852-2ed4-47c0-a66a-11265c1649b2",
+    "name": "(OCRD payload + CRD1) + CRD7"
+  },
+  {
+    "parameters": {
+      "jsCode": "const COLLECTION = 'BPFiscalTaxIDCollection';\n\nreturn items.map(item => {\n  const j = item.json || {};\n  const p = j.payload ? { ...j.payload } : {};\n  const rows = Array.isArray(j.CRD7) ? j.CRD7 : [];\n\n  p[COLLECTION] = rows.map(r => ({\n    LineNum: Number(r.LineNum ?? 0),\n    Address: String(r.Address ?? ''),\n    CNAECode: Number(r.CNAECode),        // << envia o ID interno\n    TaxId0: String(r.TaxId0 ?? ''),\n    TaxId1: String(r.TaxId1 ?? ''),\n    TaxId3: String(r.TaxId3 ?? ''),\n    TaxId4: String(r.TaxId4 ?? ''),\n    TaxId7: String(r.TaxId7 ?? ''),\n    TaxId8: String(r.TaxId8 ?? ''),\n  }));\n\n  return { json: { ...j, payload: p } };\n});"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      656,
+      3712
+    ],
+    "id": "0b3f5203-54c9-4a09-87b1-cc8ace8f46f7",
+    "name": "Anexar CRD7 ao payload (Code)"
+  },
+  {
+    "parameters": {
+      "mode": "combine",
+      "advanced": true,
+      "mergeByFields": {
+        "values": [
+          {
+            "field1": "CNAECode",
+            "field2": "CNAECode"
+          }
+        ]
+      },
+      "options": {}
+    },
+    "type": "n8n-nodes-base.merge",
+    "typeVersion": 3.2,
+    "position": [
+      -1712,
+      4416
+    ],
+    "id": "84de2a09-3e29-4407-9b2f-570160e3dd88",
+    "name": "Merge Junção CRD1+OCNA",
+    "alwaysOutputData": false
+  },
+  {
+    "parameters": {
+      "jsCode": "// Run Once for All Items\nconst rows = $input.all();\nreturn rows.map(({ json }) => {\n  // CNAECode sempre do CRD7 (já veio no item)\n  const digits = v => String(v ?? '').replace(/\\D/g,'');\n  const code = digits(json.CNAECode).padStart(7,'0');\n  json.CNAECode = code;\n\n  // AbsId enriquecido via Merge (OCNA) — nomes típicos:\n  const id = Number(digits(json.CNAEAbsId ?? json.OCNAAbsId ?? json.CNAEId));\n  if (Number.isFinite(id)) {\n    json.CNAEAbsId = id;\n    json.CNAEId    = id;\n    delete json._cnaeError;\n  } else {\n    json._cnaeError = `CNAE sem de-para: ${code || '(vazio)'}`;\n  }\n  return { json };\n});\n"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      -1408,
+      4416
+    ],
+    "id": "2af690cc-aabf-4f56-a1cc-637fb8a4f6c5",
+    "name": "De - Para CNAECode para CNAEId"
+  },
+  {
+    "parameters": {
+      "mode": "runOnceForEachItem",
+      "jsCode": "// n8n Code - runOnceForEachItem\nconst json = $json;\nconst id = (json.CNAEId ?? '').toString().trim();\nconst result = { ...json, CNAEId: id };\nif (id && !result.CNAEAbsid) result.CNAEAbsid = id;\nreturn result;\n"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      -2064,
+      4576
+    ],
+    "id": "75c3ec7b-8382-4c1e-ad95-fc3ac1321eec",
+    "name": "OCNA • CNAE → string"
+  },
+  {
+    "parameters": {
+      "operation": "get",
+      "dataTableId": {
+        "__rl": true,
+        "value": "xzwsMIvd9rSd8fsS",
+        "mode": "list",
+        "cachedResultName": "1-CNAE",
+        "cachedResultUrl": "/projects/zmawJ94DKEefV1p2/datatables/xzwsMIvd9rSd8fsS"
+      },
+      "filters": {
+        "conditions": [
+          {
+            "keyName": "CNAECode",
+            "keyValue": "={{ $json.CNAECode }}"
+          }
+        ]
+      }
+    },
+    "type": "n8n-nodes-base.dataTable",
+    "typeVersion": 1,
+    "position": [
+      -2272,
+      4576
+    ],
+    "id": "ef5997ae-eb28-43f9-bfd5-5c481e59e067",
+    "name": "DATATABLE CNAE"
+  }
+]

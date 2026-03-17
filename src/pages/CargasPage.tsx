@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { XCircle, StopCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { XCircle, StopCircle, FileUp, Upload, CheckCircle, AlertCircle } from "lucide-react";
 import { Play, Clock, CheckCircle2, AlertTriangle, Search, Eye, RotateCcw, Loader2, Plus, Pencil, Power, ChevronDown, ChevronRight, Trash2, GripVertical, Ban } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import AppLayout from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -80,9 +87,15 @@ const CargasPage = () => {
   const [cargaFormDialog, setCargaFormDialog] = useState<Carga | null | "new">(null);
   const [launchParams, setLaunchParams] = useState("");
   const [formName, setFormName] = useState("");
-  const [formDescription, setFormDescription] = useState("");
   const [formItems, setFormItems] = useState<Array<{ id?: string; name: string; webhook_url: string; active: boolean; execution_order: number }>>([]);
   
+  // SPED State
+  const [spedDialogOpen, setSpedDialogOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [spedUploadId, setSpedUploadId] = useState<string | null>(null);
+  const [spedStatus, setSpedStatus] = useState<string | null>(null);
 
   // Fetch cargas with items
   const { data: cargas = [], isLoading: loadingCargas } = useQuery({
@@ -106,6 +119,49 @@ const CargasPage = () => {
       })) as Carga[];
     },
   });
+
+  // Fetch Clients for SPED
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-minimal"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Listen for Realtime updates on sped_uploads
+  useEffect(() => {
+    if (!spedUploadId) return;
+
+    const channel = supabase
+      .channel("sped_updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sped_uploads",
+          filter: `id=eq.${spedUploadId}`,
+        },
+        (payload) => {
+          console.log("Realtime SPED update:", payload.new);
+          setSpedStatus(payload.new.status);
+          if (payload.new.status === "success" || payload.new.status === "error") {
+            // Stop listening maybe? Or just let it be.
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [spedUploadId]);
 
   // Fetch executions with polling
   const { data: executions = [], isLoading: loadingExecs } = useQuery({
@@ -310,6 +366,58 @@ const CargasPage = () => {
     }
   };
 
+  const handleSpedUpload = async () => {
+    if (!selectedClientId || !selectedFile) {
+      toast.error("Selecione um cliente e um arquivo SPED");
+      return;
+    }
+
+    setIsUploading(true);
+    setSpedStatus("uploading");
+
+    try {
+      const fileExt = selectedFile.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${profile?.tenant_id}/${fileName}`;
+
+      // 1. Upload to Storage
+      const { error: uploadError } = await supabase.storage
+        .from("sped-files")
+        .upload(filePath, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Dispatch Edge Function
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `https://kmunvgkwmdonygmldhgf.supabase.co/functions/v1/dispatch-carga-sped`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentSession?.access_token}`,
+          },
+          body: JSON.stringify({
+            client_id: selectedClientId,
+            file_path: filePath,
+          }),
+        }
+      );
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao disparar carga SPED");
+
+      setSpedUploadId(json.id);
+      setSpedStatus("processing");
+      toast.success("Arquivo enviado! Processamento iniciado.");
+    } catch (err: any) {
+      toast.error("Erro no processo", { description: err.message });
+      setSpedStatus("error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const openCargaForm = (carga?: Carga) => {
     if (carga) {
       setFormName(carga.name);
@@ -445,6 +553,41 @@ const CargasPage = () => {
               </Card>
             ) : (
               <div className="grid grid-cols-1 gap-4">
+                {/* SPED Upload Card */}
+                <Card className="border border-primary/20 bg-primary/5 hover:border-primary/40 transition-colors shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
+                          <FileUp className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold flex items-center gap-2">
+                            Carga de Parceiros via SPED
+                            <Badge variant="outline" className="text-[9px] font-normal border-primary/20 bg-primary/5 uppercase">Novo</Badge>
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Extração automática de PNs a partir de arquivos SPED Fiscal/Contribuições (Registros 0150)
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="gap-2 font-bold shadow-sm"
+                        onClick={() => {
+                          setSpedDialogOpen(true);
+                          setSpedStatus(null);
+                          setSpedUploadId(null);
+                          setSelectedFile(null);
+                        }}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload SPED
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {activeCargas.map((carga) => {
                   const isExpanded = expandedModules[carga.id] || false;
                   const activeItems = (carga.items || []).filter(i => i.active);
@@ -934,6 +1077,122 @@ const CargasPage = () => {
               <Button onClick={handleSaveCarga} disabled={saveCargaMutation.isPending}>
                 {saveCargaMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* SPED Upload Dialog */}
+        <Dialog open={spedDialogOpen} onOpenChange={(open) => { if (!open) setSpedDialogOpen(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileUp className="w-5 h-5 text-primary" />
+                Carga PN via SPED
+              </DialogTitle>
+              <DialogDescription>
+                Selecione o cliente destino e o arquivo SPED (.txt). Iremos extrair os registros 0150 e processar via IA.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Cliente Destino</Label>
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione o cliente..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                    {clients.length === 0 && (
+                      <div className="p-2 text-center text-xs text-muted-foreground whitespace-pre-wrap">Nenhum cliente ativo encontrado. Cadastre em "Clientes".</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Arquivo SPED (.txt)</Label>
+                {!selectedFile ? (
+                  <div 
+                    className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => document.getElementById("sped-file-input")?.click()}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                      <Upload className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium">Clique para selecionar</p>
+                      <p className="text-xs text-muted-foreground mt-1">Apenas arquivos .txt são aceitos</p>
+                    </div>
+                    <input 
+                      id="sped-file-input" 
+                      type="file" 
+                      accept=".txt" 
+                      className="hidden" 
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 rounded-md bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-3">
+                      <FileUp className="w-5 h-5 text-primary" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate max-w-[200px]">{selectedFile.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setSelectedFile(null)}>
+                      <XCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {spedStatus && (
+                <div className={`p-4 rounded-lg flex items-start gap-3 ${
+                  spedStatus === "success" ? "bg-status-success/10 border border-status-success/20" :
+                  spedStatus === "error" ? "bg-status-error/10 border border-status-error/20" :
+                  "bg-status-running/10 border border-status-running/20"
+                }`}>
+                  {spedStatus === "success" ? <CheckCircle className="w-5 h-5 text-status-success shrink-0" /> :
+                   spedStatus === "error" ? <AlertCircle className="w-5 h-5 text-status-error shrink-0" /> :
+                   <Loader2 className="w-5 h-5 text-status-running animate-spin shrink-0" />
+                  }
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold capitalize">
+                      {spedStatus === "uploading" ? "Enviando arquivo..." :
+                       spedStatus === "processing" ? "Extraindo dados com IA..." :
+                       spedStatus === "success" ? "Carga concluída com sucesso!" :
+                       spedStatus === "error" ? "Falha no processamento" :
+                       spedStatus}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {spedStatus === "processing" ? "Isso pode levar alguns minutos dependendo do tamanho do arquivo." :
+                       spedStatus === "success" ? "Os parceiros foram criados/atualizados no SAP." :
+                       spedStatus === "error" ? "Verifique os logs ou tente novamente." :
+                       "Aguarde a conclusão do processo."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSpedDialogOpen(false)}>
+                Fechar
+              </Button>
+              <Button 
+                onClick={handleSpedUpload} 
+                disabled={isUploading || !selectedFile || !selectedClientId || (spedStatus !== null && spedStatus !== "error" && spedStatus !== "success")}
+                className="gap-2 font-bold"
+              >
+                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Iniciar Processamento
               </Button>
             </DialogFooter>
           </DialogContent>

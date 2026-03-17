@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = JSON.parse(body);
-    const { execution_id, tenant_id, status, result, error_message } = payload;
+    const { execution_id, tenant_id, status, result, error_message, entity_type = "carga" } = payload;
 
     if (!execution_id || !tenant_id) {
       return new Response(
@@ -80,35 +80,47 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    const targetTable = entity_type === "sped" ? "sped_uploads" : "carga_executions";
+
     // Update execution - validate tenant_id matches
-    const { data: execution, error: fetchError } = await adminClient
-      .from("carga_executions")
+    const { data: record, error: fetchError } = await adminClient
+      .from(targetTable)
       .select("id, tenant_id")
       .eq("id", execution_id)
       .eq("tenant_id", tenant_id)
       .maybeSingle();
 
-    if (fetchError || !execution) {
-      return new Response(JSON.stringify({ error: "Execution not found" }), {
+    if (fetchError || !record) {
+      return new Response(JSON.stringify({ error: "Record not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const updateData: any = {
+      status,
+      finished_at: new Date().toISOString(),
+    };
+
+    if (entity_type === "carga") {
+      updateData.result = result || null;
+      updateData.error_message = error_message || null;
+    } else {
+      // SPED specific mapping if needed, otherwise use general
+      if (status === "error") {
+        updateData.error_message = error_message || "Erro desconhecido no processamento SPED";
+      }
+    }
+
     const { error: updateError } = await adminClient
-      .from("carga_executions")
-      .update({
-        status,
-        result: result || null,
-        error_message: error_message || null,
-        finished_at: new Date().toISOString(),
-      })
+      .from(targetTable)
+      .update(updateData)
       .eq("id", execution_id)
       .eq("tenant_id", tenant_id);
 
     if (updateError) {
       console.error("Update error:", updateError.message);
-      return new Response(JSON.stringify({ error: "Failed to update execution" }), {
+      return new Response(JSON.stringify({ error: "Failed to update record" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

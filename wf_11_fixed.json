@@ -1,0 +1,2488 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "7f70130d-c480-4b50-afaa-20db24c70175",
+              "leftValue": "={{$json.cnpj_num.toString().length}}",
+              "rightValue": "=14",
+              "operator": {
+                "type": "dateTime",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -6752,
+        4064
+      ],
+      "id": "a097257d-b872-423f-8fc9-05d176a64635",
+      "name": "Validar 14 Caracteres"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "08c6929e-6d0e-4ac4-b3ce-790049304825",
+              "name": "cnpj_num",
+              "value": "={{ $json.cnpj_num }}",
+              "type": "string"
+            },
+            {
+              "id": "94965f62-6c68-4ce8-99b7-7d13f63799aa",
+              "name": "cnpj_raw",
+              "value": "={{ $json.cnpj_raw }}",
+              "type": "string"
+            },
+            {
+              "id": "1fbf1465-1db3-41c8-915c-f2b7e0d479c8",
+              "name": "__row",
+              "value": "={{ $json.__row }}",
+              "type": "string"
+            },
+            {
+              "id": "2eda4d0c-d189-43e5-aa80-9b746e687517",
+              "name": "codigo_pn",
+              "value": "={{ $json.CardCode }}",
+              "type": "string"
+            },
+            {
+              "id": "d7ef0cc8-4b0c-4b87-b6a5-1eaedc196ff9",
+              "name": "CardType",
+              "value": "={{ $json.Tipo }}",
+              "type": "string"
+            },
+            {
+              "id": "c648bf29-1af3-4442-9217-ad2778d63a8a",
+              "name": "codigoPessoa",
+              "value": "={{$json.cnpj_num}}",
+              "type": "string"
+            },
+            {
+              "id": "abbe6ebc-dc84-45b7-b140-472005612905",
+              "name": "ano",
+              "value": "={{$now.format('yyyy')}}",
+              "type": "string"
+            },
+            {
+              "id": "de644e77-dc7f-4364-a547-826b2ecc5743",
+              "name": "fase",
+              "value": "3",
+              "type": "string"
+            },
+            {
+              "id": "cb821bfd-ba21-40d3-abe4-00f941a4c22f",
+              "name": "pagina",
+              "value": "1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -6256,
+        4080
+      ],
+      "id": "1e095917-b85e-4332-b61c-ebed986e6217",
+      "name": "Guardar Entrada"
+    },
+    {
+      "parameters": {
+        "url": "=https://brasilapi.com.br/api/cnpj/v1/{{$json.cnpj_num}}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5168,
+        4496
+      ],
+      "id": "a8a26166-5ebe-4f06-adf8-da57aba233e2",
+      "name": "Consultar CNPJ (BrasilAPI)",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "abd1c22b-0809-4acf-a113-b9e23f51e834",
+              "leftValue": "={{ $json.statusCode}}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -4032,
+        4064
+      ],
+      "id": "3f5dd937-8fcb-472b-a8c5-24206e317b07",
+      "name": "HTTP 200?"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -4336,
+        4112
+      ],
+      "id": "634aff03-768c-4d0a-a24c-84933bce37e6",
+      "name": "MERGE (Entrada + Resposta)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gera 1 item por CNPJ com TODAS as colunas pedidas (nomes iguais aos do SAP/planilha)\nfunction S(v) { return (v === undefined || v === null) ? '' : String(v).trim(); }\nreturn $input.all().map((item, idx) => {\n  const j = item.json;\n  const out = { ...j };\n  \n  const cardTypeIn = S(j.CardType || '');\n  out.CardCode = S(j.codigo_pn || j.CardCode);\n  out.CardName = S(j.razao_social || j.CardName);\n  out.CardType = cardTypeIn === 'S' ? 'cSupplier' : (cardTypeIn === 'L' ? 'cLead' : 'cCustomer');\n  out.AliasName = S(j.nome_fantasia || j.AliasName);\n  out.Phone1 = S(j.ddd_telefone_1 || j.Phone1);\n  out.Phone2 = S(j.ddd_telefone_2 || j.Phone2);\n  out.U_TX_IndIEDest = S(j.U_TX_IndIEDest || '9');\n  out.U_TX_IndFinal = S(j.U_TX_IndFinal || '0');\n  out.U_TX_SN = S(j.U_TX_SN || '0');\n  \n  out._idx = idx;\n  return { json: out };\n});\n",
+        "mode": "runOnceForAllItems"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2928,
+        3056
+      ],
+      "id": "f35f49d0-62f1-41ef-8580-e265be5fc4fe",
+      "name": "OCRD completo (todas as colunas)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// OCRD - Retorna APENAS o JSON com os campos mínimos exigidos p/ criação no SAP\nconst S = (v) => (v === undefined || v === null) ? '' : String(v).trim();\nreturn $input.all().map(item => {\n  const j = item.json;\n  const cardTypeIn = S(j.CardType || '');\n  \n  return {\n    json: {\n      CardCode: S(j.codigo_pn || j.CardCode),\n      CardName: S(j.razao_social || j.CardName),\n      CardType: cardTypeIn === 'S' ? 'cSupplier' : (cardTypeIn === 'L' ? 'cLead' : 'cCustomer'),\n      U_TX_SN: S(j.U_TX_SN || '0')\n    }\n  };\n});\n",
+        "mode": "runOnceForAllItems"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2528,
+        3056
+      ],
+      "id": "d23cff7f-4773-4931-9398-f62dc15afb62",
+      "name": "OCRD • Montar dados (mínimos)",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code (JavaScript) — runOnceForAllItems\nconst S = (v) => (v === undefined || v === null) ? '' : String(v).trim();\nconst toYN = (v) => (v === true || String(v).toUpperCase() === 'Y' || String(v).toUpperCase() === 'T') ? 'tYES' : 'tNO';\nreturn $input.all().map(item => {\n  const j = item.json;\n  const cardTypeIn = S(j.CardType || '');\n  const payload = {\n    CardCode: S(j.codigo_pn || j.CardCode),\n    CardName: S(j.razao_social || j.CardName),\n    CardType: cardTypeIn === 'S' ? 'cSupplier' : (cardTypeIn === 'L' ? 'cLead' : 'cCustomer'),\n    AliasName: S(j.nome_fantasia || j.AliasName),\n    Phone1: S(j.Phone1),\n    Phone2: S(j.Phone2),\n    EmailAddress: S(j.EmailAddress || j.email),\n    Valid: toYN(j.Valid),\n    Frozen: toYN(j.Frozen),\n    U_TX_IndIEDest: S(j.U_TX_IndIEDest || '9'),\n    U_TX_IndFinal: S(j.U_TX_IndFinal || '0'),\n    U_TX_SN: S(j.U_TX_SN || '0')\n  };\n  return {\n    json: {\n      ...j,\n      payload: payload\n    }\n  };\n});\n",
+        "mode": "runOnceForAllItems"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        3056
+      ],
+      "id": "97f62f30-eb8a-4979-a358-1716c5ea60c7",
+      "name": "OCRD • Build payload (SL)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6048f6c3-9c08-4ef3-bcf2-b11a1805f4ee",
+              "name": "CardCode",
+              "value": "={{ $json.codigo_pn }}",
+              "type": "string"
+            },
+            {
+              "id": "66762645-ca23-49f2-87de-4f97a1fb7253",
+              "name": "LineNum",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "c4b54934-fb0d-4390-8f1e-2bc398b5aa8d",
+              "name": "Address",
+              "value": "Cobranca",
+              "type": "string"
+            },
+            {
+              "id": "8934da31-0aca-42ec-80ed-2b8ac0c6ce6e",
+              "name": "AddrType",
+              "value": "={{ (() => {   const t = ($json.body.descricao_tipo_de_logradouro || '').toString().toUpperCase();   const map = { 'RUA':'Rua', 'AVENIDA':'Av.', 'PRACA':'Pça', 'PRAÇA':'Pça', 'TRAVESSA':'Trav.', 'ALAMEDA':'Al.', 'RODOVIA':'Rod.', 'ESTRADA':'Estr.', 'LARGO':'Lg.' };   return map[t] ?? (t ? t[0] + t.slice(1).toLowerCase() : ''); })() }}",
+              "type": "string"
+            },
+            {
+              "id": "dcc72ae2-b96c-4cfa-8486-1df89120082e",
+              "name": "AdresType",
+              "value": "bo_BillTo",
+              "type": "string"
+            },
+            {
+              "id": "6a63301f-b4e1-4b85-a81e-cf0107e3e105",
+              "name": "Street",
+              "value": "={{ $json.body.logradouro || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f95397d4-fb01-46ff-b4d4-25520812216c",
+              "name": "StreetNo",
+              "value": "={{ $json.body.numero || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c9623b57-5489-4b3a-b35f-6dad5ca40fa7",
+              "name": "Building",
+              "value": "={{ $json.body.complemento || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "42fa3640-edd0-4af2-ab06-8785772f7992",
+              "name": "Block",
+              "value": "={{ $json.body.bairro || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "73c9f198-16d6-4278-9e89-4986db0cb7e0",
+              "name": "ZipCode",
+              "value": "={{ (() => {   const cep = ($json.body.cep || '').toString().replace(/\\D/g,'').slice(0,8).padStart(8,'0');   return cep ? cep.slice(0,5) + '-' + cep.slice(5) : ''; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "e6644253-6f0e-45be-baa7-339525a50a23",
+              "name": "City",
+              "value": "={{ $json.body.municipio || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "33547252-6ca0-4b5f-ba53-b1ea20654316",
+              "name": "County",
+              "value": "={{ \n(() => {\n  // 1) Código IBGE que veio da BrasilAPI\n  const ibge = String($json.body?.codigo_municipio_ibge ?? $json.body?.codigo_municipio ?? '')\n                .replace(/\\D/g,'');\n\n  // 2) Tabela OCNT inteira (todos os itens do node Call 'SUB-OCNT-COUNTY')\n  //    -> se o nome do seu nó for outro, ajuste aqui:\n  const ocnt = $items(\"SUB-OCNT-COUNTY\").map(i => i.json);\n\n  // 3) Procura a linha do município e retorna o \"Código Interno SAP\"\n  const hit = ocnt.find(r => String(r?.codigo_municipio_ibge ?? '')\n                             .replace(/\\D/g,'') === ibge);\n\n  // 4) Se achou, usa o Código Interno SAP; senão, deixa vazio para validar depois\n  return hit ? String(hit[\"codigo_Interno_SAP\"] ?? hit.CodigoInternoSAP ?? '').trim() : '';\n})()\n}}",
+              "type": "number"
+            },
+            {
+              "id": "5c89d57c-2874-46e0-aa77-1da263a24ec9",
+              "name": "State",
+              "value": "={{ $json.body.uf || ''  }}",
+              "type": "string"
+            },
+            {
+              "id": "d871ebdc-7b34-4a12-a6e8-2540dc219e58",
+              "name": "Country",
+              "value": "BR",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2448,
+        3456
+      ],
+      "id": "7bef75a9-43a8-4913-b57a-49970bcccf11",
+      "name": "CRD1 • Montar Cobranca (Set)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6048f6c3-9c08-4ef3-bcf2-b11a1805f4ee",
+              "name": "CardCode",
+              "value": "={{ $json.codigo_pn }}",
+              "type": "string"
+            },
+            {
+              "id": "66762645-ca23-49f2-87de-4f97a1fb7253",
+              "name": "LineNum",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "c4b54934-fb0d-4390-8f1e-2bc398b5aa8d",
+              "name": "Address",
+              "value": "Entrega",
+              "type": "string"
+            },
+            {
+              "id": "8934da31-0aca-42ec-80ed-2b8ac0c6ce6e",
+              "name": "AddrType",
+              "value": "={{ (() => {   const t = ($json.body.descricao_tipo_de_logradouro || '').toString().toUpperCase();   const map = { 'RUA':'Rua', 'AVENIDA':'Av.', 'PRACA':'Pça', 'PRAÇA':'Pça', 'TRAVESSA':'Trav.', 'ALAMEDA':'Al.', 'RODOVIA':'Rod.', 'ESTRADA':'Estr.', 'LARGO':'Lg.' };   return map[t] ?? (t ? t[0] + t.slice(1).toLowerCase() : ''); })() }}",
+              "type": "string"
+            },
+            {
+              "id": "dcc72ae2-b96c-4cfa-8486-1df89120082e",
+              "name": "AdresType",
+              "value": "bo_ShipTo",
+              "type": "string"
+            },
+            {
+              "id": "6a63301f-b4e1-4b85-a81e-cf0107e3e105",
+              "name": "Street",
+              "value": "={{ $json.body.logradouro || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f95397d4-fb01-46ff-b4d4-25520812216c",
+              "name": "StreetNo",
+              "value": "={{ $json.body.numero || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c9623b57-5489-4b3a-b35f-6dad5ca40fa7",
+              "name": "Building",
+              "value": "={{ $json.body.complemento || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "42fa3640-edd0-4af2-ab06-8785772f7992",
+              "name": "Block",
+              "value": "={{ $json.body.bairro || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "73c9f198-16d6-4278-9e89-4986db0cb7e0",
+              "name": "ZipCode",
+              "value": "={{ (() => {   const cep = ($json.body.cep || '').toString().replace(/\\D/g,'').slice(0,8).padStart(8,'0');   return cep ? cep.slice(0,5) + '-' + cep.slice(5) : ''; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "e6644253-6f0e-45be-baa7-339525a50a23",
+              "name": "City",
+              "value": "={{ $json.body.municipio || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "33547252-6ca0-4b5f-ba53-b1ea20654316",
+              "name": "County",
+              "value": "={{ \n(() => {\n  // 1) Código IBGE que veio da BrasilAPI\n  const ibge = String($json.body?.codigo_municipio_ibge ?? $json.body?.codigo_municipio ?? '')\n                .replace(/\\D/g,'');\n\n  // 2) Tabela OCNT inteira (todos os itens do node Call 'SUB-OCNT-COUNTY')\n  //    -> se o nome do seu nó for outro, ajuste aqui:\n  const ocnt = $items(\"SUB-OCNT-COUNTY\").map(i => i.json);\n\n  // 3) Procura a linha do município e retorna o \"Código Interno SAP\"\n  const hit = ocnt.find(r => String(r?.codigo_municipio_ibge ?? '')\n                             .replace(/\\D/g,'') === ibge);\n\n  // 4) Se achou, usa o Código Interno SAP; senão, deixa vazio para validar depois\n  return hit ? String(hit[\"codigo_Interno_SAP\"] ?? hit.CodigoInternoSAP ?? '').trim() : '';\n})()\n}}",
+              "type": "number"
+            },
+            {
+              "id": "5c89d57c-2874-46e0-aa77-1da263a24ec9",
+              "name": "State",
+              "value": "={{ $json.body.uf || ''  }}",
+              "type": "string"
+            },
+            {
+              "id": "d871ebdc-7b34-4a12-a6e8-2540dc219e58",
+              "name": "Country",
+              "value": "BR",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2448,
+        3664
+      ],
+      "id": "c75c4567-3c47-4fcc-84a4-b13b48436490",
+      "name": "CRD1 • Montar Entrega (Set)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2096,
+        3568
+      ],
+      "id": "bee7c862-5806-4c12-b0ef-30cd6eb1a16c",
+      "name": "CRD1 • Merge (B+S)",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "17133536-3735-486d-a842-45d2278126a8",
+              "leftValue": "={{ ($json.Street || '').toString().trim().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "6dc088d6-8783-45af-aa97-84027ca920f1",
+              "leftValue": "={{ ($json.City || '').toString().trim().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "d8ed1df7-d03b-40fc-bdd0-3b4aa10afd06",
+              "leftValue": "={{ ($json.State || '').toString().toUpperCase() }}",
+              "rightValue": "^(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RO|RR|RS|SC|SP|SE|TO)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "7e7eabd6-e900-4697-a636-a3072cb0acdc",
+              "leftValue": "={{ ($json.ZipCode || '').toString().replace(/\\D/g,'').length }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1856,
+        3536
+      ],
+      "id": "b36697a4-bf83-4896-9052-6d59881fa291",
+      "name": "CRD1 • Validar Endereço"
+    },
+    {
+      "parameters": {
+        "jsCode": "const map = new Map();\nfor (const { json: j } of items) {\n  const key = String(j.CardCode);\n  if (!map.has(key)) map.set(key, { CardCode: key, BPAddresses: [] });\n  map.get(key).BPAddresses.push({\n    AddressName: j.Address,          // \"Cobranca\" | \"Entrega\"\n    AddressType: j.AdresType,        // \"bo_BillTo\" | \"bo_ShipTo\"\n    Street: j.Street || \"\",\n    StreetNo: String(j.StreetNo ?? \"\"),\n    Building: j.Building || \"\",\n    Block: j.Block || \"\",\n    ZipCode: j.ZipCode || \"\",\n    City: j.City || \"\",\n    County: String(j.County ?? \"\"),\n    State: j.State || \"\",\n    Country: j.Country || \"BR\",\n  });\n}\nreturn Array.from(map.values()).map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        3520
+      ],
+      "id": "c61b6095-8788-47e0-9500-01da7a196403",
+      "name": "CRD1 • Agrupar por CardCode (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe N itens do payload, mas emite 1 só para disparar o login uma única vez\nreturn [{ json: { trigger: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        2608
+      ],
+      "id": "fc82a612-ad17-4f93-93e3-ae4011f71cde",
+      "name": "SL • Prepare session1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://pisolucoeshanadb.b1cloud.com.br:50000/b1s/v2/Login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"CompanyDB\":\"SBO_TEMPLATESERVICO_PRD\",\n  \"UserName\": \"manager\",\n  \"Password\": \"B1admin@\"\n}\n\n",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -432,
+        2608
+      ],
+      "id": "49ad8e0e-eb61-4749-a282-64ec0f353572",
+      "name": "Login SAP B"
+    },
+    {
+      "parameters": {
+        "jsCode": "// headers completos do LOGIN (precisa de \"Include Response Headers and Status\" ON no Login)\nconst H = $json.headers || {};\n// pode vir string ou array; normalizamos para uma string única\nconst rawSetCookie = []\n  .concat(H['set-cookie'] || H['Set-Cookie'] || [])\n  .flat()\n  .join('; ');\n\n// extrai exatamente o que o SL mandou\nconst b1sessionFromCookie = (rawSetCookie.match(/B1SESSION=([^;]+)/i) || [])[1] || '';\nconst routeIdFromCookie   = (rawSetCookie.match(/ROUTEID=([^;]+)/i)  || [])[1] || '';\n\n// fallback: body também traz SessionId em alguns ambientes\nconst body = $json.body ?? $json;\nconst sessionFromBody = body?.SessionId || $json?.SessionId || '';\n\nconst sessionId = b1sessionFromCookie || sessionFromBody;\nif (!sessionId) throw new Error('SessionId/B1SESSION não encontrado no Login');\n\nconst cookie = routeIdFromCookie\n  ? `B1SESSION=${sessionId}; ROUTEID=${routeIdFromCookie}`\n  : `B1SESSION=${sessionId}`;\n\nreturn [{ json: { sessionId, routeId: routeIdFromCookie, cookie, rawSetCookie } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        2608
+      ],
+      "id": "03db54e8-42dc-4ecc-9c35-1cbf7a3a4fd5",
+      "name": "SL • Save Session1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { sessionId, routeId } = $json;\nif (!sessionId) throw new Error('Sem sessionId');\n\nconst cookie = routeId\n  ? `B1SESSION=${sessionId}; ROUTEID=${routeId}`\n  : `B1SESSION=${sessionId}`; // fallback se não vier routeId\n\nreturn [{ json: { cookie } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        2608
+      ],
+      "id": "548a6d7e-3f38-4ad7-a90e-1ae9b6c5caa8",
+      "name": "SL • Build Cookie1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "CardCode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -496,
+        3488
+      ],
+      "id": "d4f875be-0eea-4f60-9b9d-8896e55443a6",
+      "name": "(OCRD payload + CRD1)"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const j = item.json || {};\n  const p = j.payload ? { ...j.payload } : {};\n\n  const addrs = Array.isArray(j.BPAddresses) ? j.BPAddresses : [];\n\n  p.BPAddresses = addrs.map(a => ({\n    AddressName: String(a.AddressName || a.Address || ''),\n    AddressType: String(a.AddressType || a.AdresType || ''), // bo_BillTo | bo_ShipTo\n    Street:      String(a.Street || ''),\n    StreetNo:    String(a.StreetNo ?? ''),\n    // 🔁 CORREÇÃO: usar BuildingFloorRoom (e não Building)\n    BuildingFloorRoom: String(a.Building || a.BuildingFloorRoom || ''),\n    Block:       String(a.Block || ''),\n    ZipCode:     String(a.ZipCode || ''),\n    City:        String(a.City || ''),\n    County:      String(a.County ?? ''),  // ok como string\n    State:       String(a.State || ''),\n    Country:     String(a.Country || 'BR'),\n  }));\n\n  return { json: { ...j, payload: p } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        3504
+      ],
+      "id": "b35dec89-abeb-4988-8771-7375d4d8233c",
+      "name": "Anexar BPAddresses ao payload",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 3,
+        "useDataOfInput": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2080,
+        3456
+      ],
+      "id": "15eddb8b-316c-47eb-9529-854dc7636c9d",
+      "name": "Ligação sap” antes dos HTTPs"
+    },
+    {
+      "parameters": {
+        "url": "=https://pisolucoeshanadb.b1cloud.com.br:50000/b1s/v2/BusinessPartners",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "CardCode"
+            },
+            {
+              "name": "$filter",
+              "value": "={{ \"CardCode eq '\" + $json.payload.CardCode + \"'\" }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "B1S-Session",
+              "value": "={{$item(0).$node[\"SL • Save Session1\"].json.sessionId}}"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{$item(0).$node[\"SL • Build Cookie1\"].json.cookie}}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2832,
+        3472
+      ],
+      "id": "06ce8583-bf1c-4ebf-875a-c83c293f69ef",
+      "name": "HTTP • Check BP (GET)1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "8284d482-0ad2-47f3-a0c6-ae19ce8d88c9",
+              "leftValue": "={{ ($json?.value?.length ?? ($json?.body?.value?.length ?? 0)) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "17c6b1a3-1709-4976-ac01-8305ce785fd2",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3616,
+        3712
+      ],
+      "id": "d78fcd27-2be8-42c0-ab1c-e658cd0cf459",
+      "name": "IF “BP existe?\"",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8eb7847e-b9ce-4d20-bcbf-fe1131c80131",
+              "name": "patchBody",
+              "value": "={{$json.payload}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "={{ true }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2528,
+        3568
+      ],
+      "id": "b052d1cb-f105-41ab-a737-2f4823f94140",
+      "name": "Preparar body (PATCH)1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3232,
+        3712
+      ],
+      "id": "05b010e6-59c8-4019-9a77-a9a571d80b2e",
+      "name": "Merge (Combine → By position)",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://pisolucoeshanadb.b1cloud.com.br:50000/b1s/v2/BusinessPartners",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "B1S-Session",
+              "value": "={{ $item(0).$node[\"SL • Save Session1\"].json.sessionId }}"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $item(0).$node[\"SL • Build Cookie1\"].json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4880,
+        3856
+      ],
+      "id": "85bfed8e-1d7a-4c16-b317-f2986d4fc74d",
+      "name": "HTTP • Create BP Post"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "08b12056-20f8-46ed-a136-99722f0cf977",
+              "name": "sessionId",
+              "value": "={{$item(0).$node[\"SL • Save Session1\"].json.sessionId}}",
+              "type": "string"
+            },
+            {
+              "id": "0212fa0b-aaa4-49c7-b67a-ed6ddff23df3",
+              "name": "cookie",
+              "value": "={{$item(0).$node[\"SL • Build Cookie1\"].json.cookie}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2320,
+        3472
+      ],
+      "id": "3d0dfad2-9ecd-425b-8844-caa4b8218567",
+      "name": "Set – Injetar sessão"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1792,
+        3504
+      ],
+      "id": "12e3b7a0-148d-43b5-a69f-430104635624",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "upload"
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        5072,
+        3408
+      ],
+      "id": "e4c8d434-5b63-4664-a613-a757e0d3b2b9",
+      "name": "Upload file"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        4848,
+        3408
+      ],
+      "id": "f73c123a-26f6-4e9c-89d7-9c30902e014c",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0580dca2-4629-4113-90e6-43d5f5e72f57",
+              "name": "ParentKey",
+              "value": "={{ String($json.codigo_pn||'') }}",
+              "type": "string"
+            },
+            {
+              "id": "3bd11447-46ab-499f-8159-249513a663b8",
+              "name": "LineNum",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "3727a626-8aec-4b2f-b7ab-40e9a5b8e29c",
+              "name": "Address",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "e93e9d12-3d9f-4bd4-a747-afcd07227eb4",
+              "name": "CNAECode",
+              "value": "={{ String($json.body.cnae_fiscal||'').replace(/\\D/g,'') }}",
+              "type": "string"
+            },
+            {
+              "id": "74fe3db7-db15-475d-9d84-09836f396417",
+              "name": "TaxId0",
+              "value": "={{ $json.cnpj_raw }}",
+              "type": "string"
+            },
+            {
+              "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+              "name": "TaxId1",
+              "value": "={{ (() => { \n     const uf = $json.body?.uf || '';\n     const ies = Array.isArray($json.body?.inscricoes_estaduais) ? $json.body.inscricoes_estaduais : [];\n     const iesUF = uf ? ies.filter(x => String(x.estado) === uf) : ies;\n     const ativo = iesUF.find(x => x?.ativo === true && String(x?.inscricao_estadual||'').length>0);\n     if (ativo?.inscricao_estadual) return String(ativo.inscricao_estadual);\n     const isento = iesUF.find(x => x?.isento === true);\n     return isento ? 'ISENTO' : '';\n   })() }}\n",
+              "type": "string"
+            },
+            {
+              "id": "99eeda4b-ccc8-4d3f-b983-2888c5d46e3f",
+              "name": "TaxId3",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0b06d6b7-7e0e-481f-9462-88ba333b8c19",
+              "name": "TaxId4",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "cc2a086d-4392-460a-b7fc-9bba20ea5a78",
+              "name": "TaxId7",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "d9ad9e38-2b84-44ca-a6e0-62ff8d088d6d",
+              "name": "TaxId8",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3fb461f3-3af0-425e-9a5f-ea33760d02fa",
+              "name": "TaxId9",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "fe740ebc-b206-4b42-a0af-3c1f0b05ab41",
+              "name": "TaxId10",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "511e6b62-a8ff-4750-87d1-10cacbe598ee",
+              "name": "TaxId11",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2640,
+        4160
+      ],
+      "id": "74ebb7d4-8467-4581-8b24-175e6928990b",
+      "name": "Montar CRD7 - Contábil"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "99cf51e5-da56-419d-bd94-16493c5f556d",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -608,
+        3744
+      ],
+      "id": "a68de385-e543-4808-aedc-90a5b56df6ef",
+      "name": "CRD7 • Validar Dados Fiscais"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0580dca2-4629-4113-90e6-43d5f5e72f57",
+              "name": "ParentKey",
+              "value": "={{ String($json.codigo_pn||'') }}",
+              "type": "string"
+            },
+            {
+              "id": "3bd11447-46ab-499f-8159-249513a663b8",
+              "name": "LineNum",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "3727a626-8aec-4b2f-b7ab-40e9a5b8e29c",
+              "name": "Address",
+              "value": "Cobranca",
+              "type": "string"
+            },
+            {
+              "id": "e93e9d12-3d9f-4bd4-a747-afcd07227eb4",
+              "name": "CNAECode",
+              "value": "={{ String($json.body.cnae_fiscal||'').replace(/\\D/g,'') }}",
+              "type": "string"
+            },
+            {
+              "id": "74fe3db7-db15-475d-9d84-09836f396417",
+              "name": "TaxId0",
+              "value": "={{ $json.cnpj_raw }}",
+              "type": "string"
+            },
+            {
+              "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+              "name": "TaxId1",
+              "value": "={{ (() => {       const uf = $json.body?.uf || '';      const ies = Array.isArray($json.body?.inscricoes_estaduais) ? $json.body.inscricoes_estaduais : [];      const iesUF = uf ? ies.filter(x => String(x.estado) === uf) : ies;      const ativo = iesUF.find(x => x?.ativo === true && String(x?.inscricao_estadual||'').length>0);      if (ativo?.inscricao_estadual) return String(ativo.inscricao_estadual);      const isento = iesUF.find(x => x?.isento === true);      return isento ? 'ISENTO' : '';    })() }}",
+              "type": "string"
+            },
+            {
+              "id": "99eeda4b-ccc8-4d3f-b983-2888c5d46e3f",
+              "name": "TaxId3",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0b06d6b7-7e0e-481f-9462-88ba333b8c19",
+              "name": "TaxId4",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "cc2a086d-4392-460a-b7fc-9bba20ea5a78",
+              "name": "TaxId7",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "d9ad9e38-2b84-44ca-a6e0-62ff8d088d6d",
+              "name": "TaxId8",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3fb461f3-3af0-425e-9a5f-ea33760d02fa",
+              "name": "TaxId9",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "fe740ebc-b206-4b42-a0af-3c1f0b05ab41",
+              "name": "TaxId10",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "511e6b62-a8ff-4750-87d1-10cacbe598ee",
+              "name": "TaxId11",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2640,
+        4336
+      ],
+      "id": "b50134af-88fb-45b6-a3ff-b57776422104",
+      "name": "Montar CRD7 - Cobranca"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0580dca2-4629-4113-90e6-43d5f5e72f57",
+              "name": "ParentKey",
+              "value": "={{ String($json.codigo_pn||'') }}",
+              "type": "string"
+            },
+            {
+              "id": "3bd11447-46ab-499f-8159-249513a663b8",
+              "name": "LineNum",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "3727a626-8aec-4b2f-b7ab-40e9a5b8e29c",
+              "name": "Address",
+              "value": "Entrega",
+              "type": "string"
+            },
+            {
+              "id": "e93e9d12-3d9f-4bd4-a747-afcd07227eb4",
+              "name": "CNAECode",
+              "value": "={{ String($json.body.cnae_fiscal||'').replace(/\\D/g,'') }}",
+              "type": "string"
+            },
+            {
+              "id": "74fe3db7-db15-475d-9d84-09836f396417",
+              "name": "TaxId0",
+              "value": "={{ $json.cnpj_raw }}",
+              "type": "string"
+            },
+            {
+              "id": "67dcfa75-fbb9-46d8-ad22-114f41892384",
+              "name": "TaxId1",
+              "value": "={{ (() => {       const uf = $json.body?.uf || '';      const ies = Array.isArray($json.body?.inscricoes_estaduais) ? $json.body.inscricoes_estaduais : [];      const iesUF = uf ? ies.filter(x => String(x.estado) === uf) : ies;      const ativo = iesUF.find(x => x?.ativo === true && String(x?.inscricao_estadual||'').length>0);      if (ativo?.inscricao_estadual) return String(ativo.inscricao_estadual);      const isento = iesUF.find(x => x?.isento === true);      return isento ? 'ISENTO' : '';    })() }}",
+              "type": "string"
+            },
+            {
+              "id": "99eeda4b-ccc8-4d3f-b983-2888c5d46e3f",
+              "name": "TaxId3",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0b06d6b7-7e0e-481f-9462-88ba333b8c19",
+              "name": "TaxId4",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "cc2a086d-4392-460a-b7fc-9bba20ea5a78",
+              "name": "TaxId7",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "d9ad9e38-2b84-44ca-a6e0-62ff8d088d6d",
+              "name": "TaxId8",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3fb461f3-3af0-425e-9a5f-ea33760d02fa",
+              "name": "TaxId9",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "fe740ebc-b206-4b42-a0af-3c1f0b05ab41",
+              "name": "TaxId10",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "511e6b62-a8ff-4750-87d1-10cacbe598ee",
+              "name": "TaxId11",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2640,
+        4512
+      ],
+      "id": "979299f3-fed7-4b5a-bc56-745f48a10790",
+      "name": "Montar CRD7 - Entrega"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2272,
+        4320
+      ],
+      "id": "c3dd5ae5-d4d4-45ef-aea8-8cbaf1fac2c4",
+      "name": "CRD7 • Merge (C+B+S)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrupa linhas CRD7 por ParentKey e remove duplicidade ParentKey+LineNum (E09)\n\nconst map = new Map();\n\nfor (const { json: j } of items) {\n  const key = String(j.ParentKey ?? j.CardCode ?? '').trim();\n  if (!key) continue; // (deixe para a validação formal marcar E01 se preferir)\n\n  if (!map.has(key)) {\n    map.set(key, { ParentKey: key, CRD7: [] });\n  }\n\n  const lineNumStr = String(j.LineNum ?? '');\n  const bucket = map.get(key).CRD7;\n\n  // evita duplicidade ParentKey+LineNum (E09)\n  const exists = bucket.find(x => String(x.LineNum) === lineNumStr);\n  if (!exists) {\n    bucket.push({\n      LineNum: lineNumStr,                      // manter string aqui; convert. p/ Number no PATCH se quiser\n      Address: String(j.Address ?? ''),\n      CNAECode: String(j.CNAEAbsId ?? ''),\n      TaxId0: String(j.TaxId0 ?? ''),\n      TaxId1: String(j.TaxId1 ?? ''),\n      TaxId3: String(j.TaxId3 ?? ''),\n      TaxId4: String(j.TaxId4 ?? ''),\n      TaxId7: String(j.TaxId7 ?? ''),\n      TaxId8: String(j.TaxId8 ?? ''),\n    });\n  }\n}\n\n// Saída: [{ json: { ParentKey, CRD7: [...] } }, ...]\nreturn Array.from(map.values()).map(x => ({ json: x }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        3728
+      ],
+      "id": "a995b526-9524-4d66-9406-62c4fa085bf1",
+      "name": "CRD7 • Agrupar por CardCode (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara chave de merge e saneia a coleção CRD7 no mesmo passo\nfunction onlyDigits(s){ return String(s ?? '').replace(/\\D/g,''); }\nfunction normalizeAddress(a){\n  const v = String(a ?? '');\n  if (v.toLowerCase() === 'cobrança') return 'Cobranca';\n  return v;\n}\nreturn $input.all().map(({ json }) => {\n  const key = String(json.ParentKey ?? json.CardCode ?? '').trim();\n  const rows = Array.isArray(json.CRD7) ? json.CRD7.map(r => {\n    return {\n      LineNum : String(r.LineNum ?? ''),\n      Address : normalizeAddress(r.Address),\n      CNAECode: onlyDigits(r.CNAECode),\n      TaxId0  : String(r.TaxId0),\n      TaxId1  : String(r.TaxId1 ?? '').trim(),\n      TaxId3  : String(r.TaxId3 ?? '').trim(),\n      TaxId4  : onlyDigits(r.TaxId4),\n      TaxId7  : String(r.TaxId7 ?? '').trim(),\n      TaxId8  : String(r.TaxId8 ?? '').trim(),\n    };\n  }) : [];\n  return {\n    json: {\n      ...json,\n      ParentKey: key,\n      CardCode : key,\n      CRD7     : rows\n    }\n  };\n});\n",
+        "mode": "runOnceForAllItems"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        3728
+      ],
+      "id": "7fbb0ac9-2828-483d-a92f-cc8ad1f3f7c7",
+      "name": "CRD7 • Preparar chave + Sanear (Code)"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "CardCode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        416,
+        3712
+      ],
+      "id": "f2485852-2ed4-47c0-a66a-11265c1649b2",
+      "name": "(OCRD payload + CRD1) + CRD7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const COLLECTION = 'BPFiscalTaxIDCollection';\n\nreturn items.map(item => {\n  const j = item.json || {};\n  const p = j.payload ? { ...j.payload } : {};\n  const rows = Array.isArray(j.CRD7) ? j.CRD7 : [];\n\n  p[COLLECTION] = rows.map(r => ({\n    LineNum: Number(r.LineNum ?? 0),\n    Address: String(r.Address ?? ''),\n    CNAECode: Number(r.CNAECode),        // << envia o ID interno\n    TaxId0: String(r.TaxId0 ?? ''),\n    TaxId1: String(r.TaxId1 ?? ''),\n    TaxId3: String(r.TaxId3 ?? ''),\n    TaxId4: String(r.TaxId4 ?? ''),\n    TaxId7: String(r.TaxId7 ?? ''),\n    TaxId8: String(r.TaxId8 ?? ''),\n  }));\n\n  return { json: { ...j, payload: p } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        3712
+      ],
+      "id": "0b3f5203-54c9-4a09-87b1-cc8ace8f46f7",
+      "name": "Anexar CRD7 ao payload (Code)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara o corpo do PATCH a partir do payload já montado\nreturn items.map(item => {\n  const j = item.json || {};\n  const p = j.payload ? { ...j.payload } : {};\n\n  // (opcional) saneio final leve\n  // - garante que as coleções existam como arrays\n  p.BPAddresses = Array.isArray(p.BPAddresses) ? p.BPAddresses : [];\n  p.BPFiscalTaxIDCollection = Array.isArray(p.BPFiscalTaxIDCollection) ? p.BPFiscalTaxIDCollection : [];\n\n  // Devolve num campo separado para apontar no HTTP\n  return { json: { ...j, bodyPatch: p } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        3712
+      ],
+      "id": "bf34573a-a703-4999-9e77-7a8d92047320",
+      "name": "Preparar body (PATCH)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7c54cc0-4017-4e1f-b83b-e66d701a4e10",
+              "name": "CardCode",
+              "value": "={{ $json.CardCode}} - Este Pn já existe",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "include": "selected",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4000,
+        3408
+      ],
+      "id": "362f5b63-3a1f-465e-b216-68e61f736762",
+      "name": "Mensagem Erro PATCH"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * n8n - Code Node (runOnceForEachItem)\n */\nconst j = $json;\ntry {\n  const deepClone = (obj) => (obj ? JSON.parse(JSON.stringify(obj)) : obj);\n  const toYesNo = (v) => {\n    if (typeof v === 'string') {\n      const s = v.trim().toLowerCase();\n      if (s === 'tyes' || s === 'yes' || s === 'true') return 'tYES';\n      if (s === 'tno'  || s === 'no'  || s === 'false') return 'tNO';\n      return v;\n    }\n    if (typeof v === 'boolean') return v ? 'tYES' : 'tNO';\n    return v ?? undefined;\n  };\n  const stripLineNum = (arr) => {\n    if (!Array.isArray(arr)) return arr;\n    return arr.map((row) => {\n      if (!row || typeof row !== 'object') return row;\n      const { LineNum, ...rest } = row;\n      return rest;\n    });\n  };\n  const ensureNumberOrString = (v) => {\n    if (v === null || v === undefined) return v;\n    const n = Number(v);\n    return Number.isFinite(n) ? n : v;\n  };\n  const normalizeFiscalFromCRD7 = (crd7) => {\n    if (!Array.isArray(crd7)) return undefined;\n    return crd7.map((r) => ({\n      Address: r.Address ?? '',\n      CNAECode: ensureNumberOrString(r.CNAECode),\n      TaxId0: r.TaxId0 ?? '',\n      TaxId1: r.TaxId1 ?? '',\n      TaxId3: r.TaxId3 ?? '',\n      TaxId4: r.TaxId4 ?? '',\n      TaxId7: r.TaxId7 ?? '',\n      TaxId8: r.TaxId8 ?? '',\n    }));\n  };\n  const normalizeAddresses = (arr) => {\n    if (!Array.isArray(arr)) return undefined;\n    return arr.map((a) => ({\n      AddressName: a.AddressName ?? '',\n      AddressType: a.AddressType ?? '',\n      Street: a.Street ?? '',\n      StreetNo: a.StreetNo ?? '',\n      BuildingFloorRoom: a.BuildingFloorRoom !== undefined ? a.BuildingFloorRoom : (a.Building !== undefined ? a.Building : ''),\n      Block: a.Block ?? '',\n      ZipCode: a.ZipCode ?? '',\n      City: a.City ?? '',\n      County: a.County ?? '',\n      State: a.State ?? '',\n      Country: a.Country ?? '',\n    }));\n  };\n\n  let src;\n  if (j.bodyPatch && typeof j.bodyPatch === 'object') {\n    src = deepClone(j.bodyPatch);\n  } else if (j.payload && typeof j.payload === 'object') {\n    src = deepClone(j.payload);\n  } else {\n    src = {\n      CardCode: j.CardCode,\n      CardName: j.CardName,\n      CardType: j.CardType,\n      AliasName: j.AliasName,\n      Phone1: j.Phone1,\n      Phone2: j.Phone2,\n      Valid: j.Valid ?? toYesNo(j.validFor),\n      Frozen: j.Frozen ?? toYesNo(j.frozenFor),\n      U_TX_IndIEDest: j.U_TX_IndIEDest,\n      U_TX_IndFinal: j.U_TX_IndFinal,\n      U_TX_SN: j.U_TX_SN,\n    };\n    const fiscalFromTop = normalizeFiscalFromCRD7(j.CRD7);\n    if (fiscalFromTop) src.BPFiscalTaxIDCollection = fiscalFromTop;\n    const addrFromTop = normalizeAddresses(j.BPAddresses);\n    if (addrFromTop) src.BPAddresses = addrFromTop;\n  }\n\n  if (src.Valid === undefined && j.validFor !== undefined) src.Valid = toYesNo(j.validFor);\n  if (src.Frozen === undefined && j.frozenFor !== undefined) src.Frozen = toYesNo(j.frozenFor);\n  \n  src.BPFiscalTaxIDCollection = stripLineNum(src.BPFiscalTaxIDCollection || normalizeFiscalFromCRD7(j.CRD7));\n  src.BPAddresses = normalizeAddresses(src.BPAddresses || j.BPAddresses);\n\n  for (const k of Object.keys(j)) {\n    if (k.startsWith('U_')) {\n      const v = j[k];\n      if (v !== undefined && v !== null && v !== '' && src[k] === undefined) {\n        src[k] = v;\n      }\n    }\n  }\n  delete src['@odata.context'];\n  delete src.value;\n  return src;\n} catch (e) {\n  return {\n    error: true,\n    message: e?.message || 'Falha ao preparar body (POST)',\n    debugInput: j ?? null,\n  };\n}\n",
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3968,
+        3856
+      ],
+      "id": "307787b0-5481-4dd9-bbf6-27ca0a31f964",
+      "name": "Preparar body (POST)"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "CNAECode",
+              "field2": "CNAECode"
+            }
+          ]
+        },
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1712,
+        4416
+      ],
+      "id": "84de2a09-3e29-4407-9b2f-570160e3dd88",
+      "name": "Merge Junção CRD1+OCNA",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Run Once for All Items\nconst rows = $input.all();\nreturn rows.map(({ json }) => {\n  // CNAECode sempre do CRD7 (já veio no item)\n  const digits = v => String(v ?? '').replace(/\\D/g,'');\n  const code = digits(json.CNAECode).padStart(7,'0');\n  json.CNAECode = code;\n\n  // AbsId enriquecido via Merge (OCNA) — nomes típicos:\n  const id = Number(digits(json.CNAEAbsId ?? json.OCNAAbsId ?? json.CNAEId));\n  if (Number.isFinite(id)) {\n    json.CNAEAbsId = id;\n    json.CNAEId    = id;\n    delete json._cnaeError;\n  } else {\n    json._cnaeError = `CNAE sem de-para: ${code || '(vazio)'}`;\n  }\n  return { json };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1408,
+        4416
+      ],
+      "id": "2af690cc-aabf-4f56-a1cc-637fb8a4f6c5",
+      "name": "De - Para CNAECode para CNAEId"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(({ json }) => {\n  json.CNAEId = (json.CNAEId ?? '').toString().trim();\n  // garanta o nome do id: CNAEAbsid  (algumas saídas aparecem como CNAEAbsId/CNAEId)\n  if (json.CNAEId&& !json.CNAEAbsid) json.CNAEAbsid = json.CNAEId;\n  if (json.CNAEAbsId && !json.CNAEAbsid) json.CNAEAbsid = json.CNAEAbsId;\n  return { json };\n});\n\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2064,
+        4576
+      ],
+      "id": "75c3ec7b-8382-4c1e-ad95-fc3ac1321eec",
+      "name": "OCNA • CNAE → string"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2752,
+        3536
+      ],
+      "id": "cda7ee46-7187-4744-afcc-d3dfebaeaac4",
+      "name": "Juncao OCNT+CRD1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -3424,
+        3056
+      ],
+      "id": "bc66d5ff-c9b8-4106-b4c2-9478467d5413",
+      "name": "OCRD - Merge - Ligação"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code Node (runOnceForEachItem)\nfunction cleanStr(v){ if(v==null) return \"\"; return String(v).trim(); }\nfunction onlyDigits(v){ return cleanStr(v).replace(/\\D/g,''); }\n\nconst item = $json;\n\nreturn {\n  ...item,\n  \"__row\": (item.__row != null) ? item.__row : 2,\n  \"codigo_pn\": onlyDigits(item.cnpj || item.CNPJ || \"\"),\n  \"nome_pn\": cleanStr(item.razao_social || item.Nome || \"\"),\n  \"phone1\": onlyDigits(item.telefone || \"\"),\n  \"email\": cleanStr(item.email || \"\"),\n  \"currency\": \"##\",\n  \"groupCode\": 100\n};\n",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4064,
+        4256
+      ],
+      "id": "b3529f2f-7e57-465c-96cc-3ce6fa63d75c",
+      "name": "PT • Paginar + Somar 12m1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3bf5a0c9-615e-4ca8-bf9e-bca471b472b7",
+              "name": "cnpj_raw",
+              "value": "={{ $json.cnpj_raw || '' }} - CNPJ FORA DO FORMATO",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -6336,
+        4624
+      ],
+      "id": "8455bd27-158a-4a29-8156-f22e3cb1896e",
+      "name": "ERRO CNPJ"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -6128,
+        4624
+      ],
+      "id": "298b5dd2-171d-4903-b22e-8d508ecf05e2",
+      "name": "CONVERSAO ARQUIVO XLS ERRO CNPJ"
+    },
+    {
+      "parameters": {
+        "operation": "upload"
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5808,
+        4624
+      ],
+      "id": "7c115e32-fda6-4667-8fb6-510fc76520ee",
+      "name": "UPLOAD FILE XLSX FORMATACAO CNPJ"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -4432,
+        3792
+      ],
+      "id": "b1767325-75dc-41f8-88da-e87d16b11ce3",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "operation": "upload"
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -4768,
+        3792
+      ],
+      "id": "2017e525-3da0-47b8-9aea-17cdd3a5489e",
+      "name": "Resultado final"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -5040,
+        3792
+      ],
+      "id": "ab12ff41-67fe-4670-82cc-4f25c032ce6d",
+      "name": "Conversão Final"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "be7e6246-9f2e-4152-a111-702bff80c90d",
+              "name": "CardCode",
+              "value": "={{ $json.CardCode }} - Cadastrado com sucesso!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -5280,
+        3792
+      ],
+      "id": "d09ccb9e-b50f-4110-aafc-2a9d31eec060",
+      "name": "Ordenação Final"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -5744,
+        4160
+      ],
+      "id": "c860ace4-f0d2-44b5-96b2-d9f73c2571a1",
+      "name": "CNPJ de 20 em 20",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -5984,
+        4512
+      ],
+      "id": "9b397069-6dab-448e-bf23-43a92afd99f2",
+      "name": "Wait",
+      "webhookId": "293ebb0e-926a-4f39-95c7-c55c003b1fd6"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item, idx) => {\n  const raw = (item.json.CNPJ ?? '').toString();\n  const num = raw.replace(/\\D/g, '');\n  return { json: { ...item.json, cnpj_raw: raw, cnpj_num: num, __row: idx + 2 } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7168,
+        4064
+      ],
+      "id": "152a4545-8277-48fb-b69b-74aa292ea152",
+      "name": "Tirar Caracteres Especiais1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "hP0GEO94CKgung83",
+          "mode": "list",
+          "cachedResultName": "1-PN Excel",
+          "cachedResultUrl": "/projects/zmawJ94DKEefV1p2/datatables/hP0GEO94CKgung83"
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -8336,
+        3936
+      ],
+      "id": "0876d0c3-5a35-4ed4-9998-d68648d8c33e",
+      "name": "EXCEL"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "CardCode",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -7952,
+        4064
+      ],
+      "id": "1b27d98f-15e8-4021-ad82-39a3354863ff",
+      "name": "Juncao SAP+Excel SUB"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xzwsMIvd9rSd8fsS",
+          "mode": "list",
+          "cachedResultName": "1-CNAE",
+          "cachedResultUrl": "/projects/zmawJ94DKEefV1p2/datatables/xzwsMIvd9rSd8fsS"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "CNAECode",
+              "keyValue": "={{ $json.CNAECode }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -2272,
+        4576
+      ],
+      "id": "ef5997ae-eb28-43f9-bfd5-5c481e59e067",
+      "name": "DATATABLE CNAE",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "wdDASc3pCaynDpkw",
+          "mode": "list",
+          "cachedResultName": "1-COUNTY OCNT",
+          "cachedResultUrl": "/projects/zmawJ94DKEefV1p2/datatables/wdDASc3pCaynDpkw"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "codigo_municipio_ibge",
+              "keyValue": "={{ $json.body.codigo_municipio_ibge }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -2976,
+        3744
+      ],
+      "id": "cecd4d4d-5efe-4fc5-81a0-d6946cc404f7",
+      "name": "SUB-OCNT-COUNTY"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bb359613-d972-463d-94c1-0bdc9ad5e3cb",
+              "name": "CNPJ",
+              "value": "={{ $json.CNPJ }}",
+              "type": "string"
+            },
+            {
+              "id": "38a5282e-74bb-4f34-aa0a-6c2625f56f0e",
+              "name": "Tipo",
+              "value": "={{ $json.Tipo }}",
+              "type": "string"
+            },
+            {
+              "id": "8c9d186a-7acc-44b5-8a8d-f182cefc7bfe",
+              "name": "Ncaracteres",
+              "value": "={{ $json.Ncaracteres }}",
+              "type": "string"
+            },
+            {
+              "id": "366b8aad-44cc-4947-9bc5-700d6b36a5b1",
+              "name": "CardCode",
+              "value": "={{ $json.CardCode }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -7552,
+        4064
+      ],
+      "id": "c9128e62-1595-4d11-92de-b4d56f64b880",
+      "name": "Alinhamento  Tabelas"
+    },
+    {
+      "parameters": {
+        "content": "# DADOS CLIENTES:\n## SOLUÇÕES:\n### https://pisolucoeshanadb.b1cloud.com.br:50000/b1s/v2/Login\n### https://pisolucoeshanadb.b1cloud.com.br:50000/b1s/v2/BusinessPartners\n## ZHOUSE\n### https://sap-zhouse-sl.skyinone.net:50000/b1s/v1/Login\n### https://sap-zhouse-sl.skyinone.net:50000/b1s/v1/BusinessPartners\n",
+        "height": 800,
+        "width": 2032
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -8896,
+        2128
+      ],
+      "typeVersion": 1,
+      "id": "3cc15236-7f30-4643-ac55-266188a7a4cf",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "carga-1-1",
+        "options": {}
+      },
+      "id": "c2f6a8e3-4208-4031-915e-8a7ec8658007",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -8832,
+        3936
+      ],
+      "webhookId": "2f77e892-ffd2-41d6-bb58-04c493197422"
+    }
+  ],
+  "connections": {
+    "Validar 14 Caracteres": {
+      "main": [
+        [
+          {
+            "node": "Guardar Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ERRO CNPJ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Entrada": {
+      "main": [
+        [
+          {
+            "node": "CNPJ de 20 em 20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar CNPJ (BrasilAPI)": {
+      "main": [
+        [
+          {
+            "node": "MERGE (Entrada + Resposta)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP 200?": {
+      "main": [
+        [
+          {
+            "node": "Montar CRD7 - Contábil",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Montar CRD7 - Cobranca",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Montar CRD7 - Entrega",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OCRD - Merge - Ligação",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Juncao OCNT+CRD1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SUB-OCNT-COUNTY",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MERGE (Entrada + Resposta)": {
+      "main": [
+        [
+          {
+            "node": "HTTP 200?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PT • Paginar + Somar 12m1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCRD completo (todas as colunas)": {
+      "main": [
+        [
+          {
+            "node": "OCRD • Montar dados (mínimos)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCRD • Montar dados (mínimos)": {
+      "main": [
+        [
+          {
+            "node": "OCRD • Build payload (SL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCRD • Build payload (SL)": {
+      "main": [
+        [
+          {
+            "node": "(OCRD payload + CRD1)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SL • Prepare session1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD1 • Montar Cobranca (Set)": {
+      "main": [
+        [
+          {
+            "node": "CRD1 • Merge (B+S)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD1 • Montar Entrega (Set)": {
+      "main": [
+        [
+          {
+            "node": "CRD1 • Merge (B+S)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "CRD1 • Merge (B+S)": {
+      "main": [
+        [
+          {
+            "node": "CRD1 • Validar Endereço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD1 • Validar Endereço": {
+      "main": [
+        [
+          {
+            "node": "CRD1 • Agrupar por CardCode (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD1 • Agrupar por CardCode (Code)": {
+      "main": [
+        [
+          {
+            "node": "(OCRD payload + CRD1)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SL • Prepare session1": {
+      "main": [
+        [
+          {
+            "node": "Login SAP B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login SAP B": {
+      "main": [
+        [
+          {
+            "node": "SL • Save Session1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SL • Save Session1": {
+      "main": [
+        [
+          {
+            "node": "SL • Build Cookie1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SL • Build Cookie1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ligação sap” antes dos HTTPs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "(OCRD payload + CRD1)": {
+      "main": [
+        [
+          {
+            "node": "(OCRD payload + CRD1) + CRD7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anexar BPAddresses ao payload": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Preparar body (PATCH)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ligação sap” antes dos HTTPs": {
+      "main": [
+        [
+          {
+            "node": "Set – Injetar sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP • Check BP (GET)1": {
+      "main": [
+        [
+          {
+            "node": "Merge (Combine → By position)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF “BP existe?\"": {
+      "main": [
+        [
+          {
+            "node": "Mensagem Erro PATCH",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar body (POST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar body (PATCH)1": {
+      "main": [
+        [
+          {
+            "node": "HTTP • Check BP (GET)1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge (Combine → By position)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge (Combine → By position)": {
+      "main": [
+        [
+          {
+            "node": "IF “BP existe?\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP • Create BP Post": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set – Injetar sessão": {
+      "main": [
+        [
+          {
+            "node": "Preparar body (PATCH)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Ligação sap” antes dos HTTPs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        []
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar CRD7 - Contábil": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Merge (C+B+S)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD7 • Validar Dados Fiscais": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Agrupar por CardCode (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar CRD7 - Cobranca": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Merge (C+B+S)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Montar CRD7 - Entrega": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Merge (C+B+S)",
+            "type": "main",
+            "index": 2
+          },
+          {
+            "node": "DATATABLE CNAE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD7 • Merge (C+B+S)": {
+      "main": [
+        [
+          {
+            "node": "Merge Junção CRD1+OCNA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD7 • Agrupar por CardCode (Code)": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Preparar chave + Sanear (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRD7 • Preparar chave + Sanear (Code)": {
+      "main": [
+        [
+          {
+            "node": "(OCRD payload + CRD1) + CRD7",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "(OCRD payload + CRD1) + CRD7": {
+      "main": [
+        [
+          {
+            "node": "Anexar CRD7 ao payload (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anexar CRD7 ao payload (Code)": {
+      "main": [
+        [
+          {
+            "node": "Anexar BPAddresses ao payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar body (PATCH)": {
+      "main": [
+        [
+          {
+            "node": "Preparar body (PATCH)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem Erro PATCH": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar body (POST)": {
+      "main": [
+        [
+          {
+            "node": "HTTP • Create BP Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Junção CRD1+OCNA": {
+      "main": [
+        [
+          {
+            "node": "De - Para CNAECode para CNAEId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "De - Para CNAECode para CNAEId": {
+      "main": [
+        [
+          {
+            "node": "CRD7 • Validar Dados Fiscais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCNA • CNAE → string": {
+      "main": [
+        [
+          {
+            "node": "Merge Junção CRD1+OCNA",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Juncao OCNT+CRD1": {
+      "main": [
+        [
+          {
+            "node": "CRD1 • Montar Cobranca (Set)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CRD1 • Montar Entrega (Set)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCRD - Merge - Ligação": {
+      "main": [
+        [
+          {
+            "node": "OCRD completo (todas as colunas)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PT • Paginar + Somar 12m1": {
+      "main": [
+        [
+          {
+            "node": "OCRD - Merge - Ligação",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "ERRO CNPJ": {
+      "main": [
+        [
+          {
+            "node": "CONVERSAO ARQUIVO XLS ERRO CNPJ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONVERSAO ARQUIVO XLS ERRO CNPJ": {
+      "main": [
+        [
+          {
+            "node": "UPLOAD FILE XLSX FORMATACAO CNPJ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado final": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversão Final": {
+      "main": [
+        [
+          {
+            "node": "Resultado final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ordenação Final": {
+      "main": [
+        [
+          {
+            "node": "Conversão Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UPLOAD FILE XLSX FORMATACAO CNPJ": {
+      "main": [
+        []
+      ]
+    },
+    "CNPJ de 20 em 20": {
+      "main": [
+        [
+          {
+            "node": "Ordenação Final",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MERGE (Entrada + Resposta)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Consultar CNPJ (BrasilAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "CNPJ de 20 em 20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tirar Caracteres Especiais1": {
+      "main": [
+        [
+          {
+            "node": "Validar 14 Caracteres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EXCEL": {
+      "main": [
+        [
+          {
+            "node": "Juncao SAP+Excel SUB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juncao SAP+Excel SUB": {
+      "main": [
+        [
+          {
+            "node": "Alinhamento  Tabelas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DATATABLE CNAE": {
+      "main": [
+        [
+          {
+            "node": "OCNA • CNAE → string",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUB-OCNT-COUNTY": {
+      "main": [
+        [
+          {
+            "node": "Juncao OCNT+CRD1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Alinhamento  Tabelas": {
+      "main": [
+        [
+          {
+            "node": "Tirar Caracteres Especiais1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "EXCEL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "name": "1.1-CARGA_PN_MANUAL _PRD",
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "OmtJx06RgvphiWIk"
+  }
+}

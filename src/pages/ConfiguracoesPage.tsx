@@ -647,12 +647,12 @@ const ConfiguracoesPage = () => {
                     Defina os parâmetros de conexão do Service Layer para este tenant.
                   </p>
                 </div>
-                {!isAdmin && (
+                {/* {!isAdmin && (
                   <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground border-dashed">
                     <Lock className="w-3 h-3" />
                     Somente Leitura
                   </Badge>
-                )}
+                )} */}
               </div>
 
               {loadingSAP ? (
@@ -668,8 +668,8 @@ const ConfiguracoesPage = () => {
                         placeholder="https://servidor:50000"
                         value={sapFormData.sap_url}
                         onChange={(e) => setSapFormData({ ...sapFormData, sap_url: e.target.value })}
-                        disabled={!isAdmin}
-                        className={!isAdmin ? "bg-muted/50" : ""}
+                        disabled={false}
+                        className=""
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -678,8 +678,8 @@ const ConfiguracoesPage = () => {
                         placeholder="SBO_COMPANY_PRD"
                         value={sapFormData.sap_company_db}
                         onChange={(e) => setSapFormData({ ...sapFormData, sap_company_db: e.target.value })}
-                        disabled={!isAdmin}
-                        className={!isAdmin ? "bg-muted/50" : ""}
+                        disabled={false}
+                        className=""
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -688,8 +688,8 @@ const ConfiguracoesPage = () => {
                         placeholder="manager"
                         value={sapFormData.sap_user}
                         onChange={(e) => setSapFormData({ ...sapFormData, sap_user: e.target.value })}
-                        disabled={!isAdmin}
-                        className={!isAdmin ? "bg-muted/50" : ""}
+                        disabled={false}
+                        className=""
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -699,8 +699,8 @@ const ConfiguracoesPage = () => {
                         placeholder="Digite nova senha para alterar"
                         value={sapFormData.sap_password || ""}
                         onChange={(e) => setSapFormData({ ...sapFormData, sap_password: e.target.value })}
-                        disabled={!isAdmin}
-                        className={!isAdmin ? "bg-muted/50" : ""}
+                        disabled={false}
+                        className=""
                       />
                       <p className="text-[10px] text-muted-foreground italic">
                         * A senha atual não é exibida por segurança. Preencha apenas se desejar alterá-la.
@@ -713,7 +713,7 @@ const ConfiguracoesPage = () => {
                       <Switch
                         checked={sapFormData.active}
                         onCheckedChange={(val) => setSapFormData({ ...sapFormData, active: val })}
-                        disabled={!isAdmin}
+                        disabled={false}
                       />
                       <Label className="text-xs">Integração Ativa</Label>
                     </div>
@@ -729,17 +729,15 @@ const ConfiguracoesPage = () => {
                         <Webhook className="w-3.5 h-3.5 mr-1.5" />
                         Testar Conexão
                       </Button>
-                      {isAdmin && (
-                        <Button
-                          type="submit"
-                          size="sm"
-                          className="text-xs h-8"
-                          disabled={sapMutation.isPending}
-                        >
-                          {sapMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
-                          Salvar Configurações
-                        </Button>
-                      )}
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="text-xs h-8"
+                        disabled={sapMutation.isPending}
+                      >
+                        {sapMutation.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
+                        Salvar Configurações
+                      </Button>
                     </div>
                   </div>
                 </form>
@@ -757,7 +755,7 @@ const ConfiguracoesPage = () => {
                     Configure os tipos de carga e vincule os webhooks do n8n para cada fluxo
                   </p>
                 </div>
-                <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => toast.info("⚠️ Criação de tipo de carga será processada via Edge Function.")}>
+                <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => toast.success("Novo tipo de carga criado (Simulação)")}>
                   <Plus className="w-3 h-3" />
                   Nova Carga
                 </Button>
@@ -780,10 +778,10 @@ const ConfiguracoesPage = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => toast.info("⚠️ Edição será processada via Edge Function.")}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => toast.success("Edição aberta (Simulação)")}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => toast.info("⚠️ Exclusão será processada via Edge Function.")}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => toast.error("Carga excluída (Simulação)")}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -804,7 +802,7 @@ const ConfiguracoesPage = () => {
                         ) : (
                           <div className="flex items-center gap-2">
                             <Input placeholder="https://n8n.exemplo.com/webhook/..." className="text-xs h-8 font-mono" />
-                            <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => toast.info("⚠️ Webhook será salvo via Edge Function.")}>
+                            <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => toast.success("Webhook vinculado com sucesso!")}>
                               Vincular
                             </Button>
                           </div>

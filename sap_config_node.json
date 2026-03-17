@@ -1,0 +1,42 @@
+{
+  "parameters": {
+    "assignments": {
+      "assignments": [
+        {
+          "id": "sap-url-id-999",
+          "name": "sap_url",
+          "type": "string",
+          "value": "={{ $json.body.sap_url }}"
+        },
+        {
+          "id": "sap-db-id-999",
+          "name": "sap_company_db",
+          "type": "string",
+          "value": "={{ $json.body.sap_company_db }}"
+        },
+        {
+          "id": "sap-user-id-999",
+          "name": "sap_user",
+          "type": "string",
+          "value": "={{ $json.body.sap_user }}"
+        },
+        {
+          "id": "sap-pass-id-999",
+          "name": "sap_password",
+          "type": "string",
+          "value": "={{ $json.body.sap_password }}"
+        }
+      ]
+    },
+    "includeOtherFields": true,
+    "options": {}
+  },
+  "id": "b3397d53-3778-4f52-81e1-d5f33d0c3ee4",
+  "name": "SAP Config",
+  "type": "n8n-nodes-base.set",
+  "typeVersion": 3.4,
+  "position": [
+    -8608,
+    4032
+  ]
+}

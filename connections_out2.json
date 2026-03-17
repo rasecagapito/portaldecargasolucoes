@@ -1,0 +1,35 @@
+{
+  "HTTP 200?": [
+    "Montar CRD7 - Contábil",
+    "Montar CRD7 - Cobranca",
+    "Montar CRD7 - Entrega",
+    "OCRD - Merge - Ligação",
+    "Juncao OCNT+CRD1",
+    "SUB-OCNT-COUNTY"
+  ],
+  "Montar CRD7 - Contábil": [
+    "CRD7 • Merge (C+B+S)"
+  ],
+  "Montar CRD7 - Cobranca": [
+    "CRD7 • Merge (C+B+S)"
+  ],
+  "Montar CRD7 - Entrega": [
+    "CRD7 • Merge (C+B+S)",
+    "DATATABLE CNAE"
+  ],
+  "CRD7 • Merge (C+B+S)": [
+    "Merge Junção CRD1+OCNA"
+  ],
+  "Merge Junção CRD1+OCNA": [
+    "De - Para CNAECode para CNAEId"
+  ],
+  "De - Para CNAECode para CNAEId": [
+    "CRD7 • Validar Dados Fiscais"
+  ],
+  "OCNA • CNAE → string": [
+    "Merge Junção CRD1+OCNA"
+  ],
+  "DATATABLE CNAE": [
+    "OCNA • CNAE → string"
+  ]
+}

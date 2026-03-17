@@ -1,0 +1,20 @@
+{
+  "Montar CRD7 - Entrega": [
+    "DATATABLE CNAE"
+  ],
+  "CRD7 • Merge (C+B+S)": [
+    "Merge Junção CRD1+OCNA"
+  ],
+  "Merge Junção CRD1+OCNA": [
+    "De - Para CNAECode para CNAEId"
+  ],
+  "De - Para CNAECode para CNAEId": [
+    "CRD7 • Validar Dados Fiscais"
+  ],
+  "OCNA • CNAE → string": [
+    "Merge Junção CRD1+OCNA"
+  ],
+  "DATATABLE CNAE": [
+    "OCNA • CNAE → string"
+  ]
+}
