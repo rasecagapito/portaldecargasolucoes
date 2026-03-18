@@ -25,6 +25,12 @@
           "name": "sap_password",
           "type": "string",
           "value": "={{ $json.body.sap_password }}"
+        },
+        {
+          "id": "n8n-webhook-secret-id-999",
+          "name": "n8n_webhook_secret",
+          "type": "string",
+          "value": "={{ $json.body.n8n_webhook_secret }}"
         }
       ]
     },

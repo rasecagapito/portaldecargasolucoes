@@ -123,7 +123,8 @@ Deno.serve(async (req) => {
           sap_url: sapConfig.sap_url,
           sap_company_db: sapConfig.sap_company_db,
           sap_user: sapConfig.sap_user,
-          sap_password: sapConfig.decrypted_password
+          sap_password: sapConfig.decrypted_password,
+          n8n_webhook_secret: Deno.env.get("N8N_WEBHOOK_SECRET") || ""
         })
       });
 

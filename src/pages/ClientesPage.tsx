@@ -14,7 +14,7 @@ import {
   Server,
   Pencil,
   Trash2,
-  ExternalLink,
+  Upload,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,8 +69,12 @@ const ClientesPage = () => {
   const [search, setSearch] = useState("");
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [sapDialogOpen, setSapDialogOpen] = useState(false);
+  const [spedDialogOpen, setSpedDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [configuringSap, setConfiguringSap] = useState<Client | null>(null);
+  const [uploadingClient, setUploadingClient] = useState<Client | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [clientForm, setClientForm] = useState({
     name: "",
@@ -90,17 +94,29 @@ const ClientesPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch Clients with their SAP config
+  // Fetch Clients with their SAP configs (two separate queries to avoid PostgREST JOIN issues)
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: clientsData, error: clientsError } = await supabase
         .from("clients")
-        .select("*, client_sap_configs(*)")
+        .select("*")
         .order("name");
+      if (clientsError) throw clientsError;
 
-      if (error) throw error;
-      return data as Client[];
+      const { data: sapConfigs, error: sapError } = await supabase
+        .from("client_sap_configs")
+        .select("*");
+      if (sapError) throw sapError;
+
+      const combined = (clientsData || []).map((client) => ({
+        ...client,
+        client_sap_configs: (sapConfigs || []).filter(
+          (cfg) => cfg.client_id === client.id
+        ),
+      }));
+
+      return combined as Client[];
     },
   });
 
@@ -242,20 +258,66 @@ const ClientesPage = () => {
         active: config.active,
       });
     } else {
-      setSapForm({
-        sap_url: "",
-        sap_company_db: "",
-        sap_user: "",
-        sap_password: "",
-        active: true,
-      });
+      setSapForm({ sap_url: "", sap_company_db: "", sap_user: "", sap_password: "", active: true });
     }
     setSapDialogOpen(true);
   };
 
-  const filtered = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.cnpj.includes(search)
+  const openSpedUpload = (client: Client) => {
+    setUploadingClient(client);
+    setSelectedFile(null);
+    setSpedDialogOpen(true);
+  };
+
+  const handleSpedUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile || !uploadingClient) return;
+    setUploading(true);
+    try {
+      const filePath = `${profile?.tenant_id}/${uploadingClient.id}/${Date.now()}_${selectedFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("sped-files")
+        .upload(filePath, selectedFile);
+      if (uploadError) throw uploadError;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dispatch-carga-sped`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            client_id: uploadingClient.id,
+            file_path: filePath,
+          }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Erro ao disparar carga");
+      }
+
+      toast({
+        title: "Carga iniciada com sucesso!",
+        description: "Acompanhe o status em Cargas.",
+      });
+      setSpedDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: "Erro ao iniciar carga", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const filtered = clients.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.cnpj.includes(search)
   );
 
   return (
@@ -268,7 +330,14 @@ const ClientesPage = () => {
               Cadastro de clientes e configurações SAP exclusivas
             </p>
           </div>
-          <Button className="gap-2 font-semibold" onClick={() => { setEditingClient(null); resetClientForm(); setClientDialogOpen(true); }}>
+          <Button
+            className="gap-2 font-semibold"
+            onClick={() => {
+              setEditingClient(null);
+              resetClientForm();
+              setClientDialogOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Novo Cliente
           </Button>
@@ -329,26 +398,22 @@ const ClientesPage = () => {
                           <TableCell>
                             {hasSap ? (
                               <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 text-[10px] gap-1">
-                                <Server className="w-3 h-3" />
-                                Configurado
+                                <Server className="w-3 h-3" /> Configurado
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="bg-muted text-muted-foreground border-transparent text-[10px] gap-1">
-                                <XCircle className="w-3 h-3" />
-                                Pendente
+                                <XCircle className="w-3 h-3" /> Pendente
                               </Badge>
                             )}
                           </TableCell>
                           <TableCell>
                             {client.active ? (
                               <Badge variant="secondary" className="status-badge-success text-[11px] gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Ativo
+                                <CheckCircle2 className="w-3 h-3" /> Ativo
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="status-badge-error text-[11px] gap-1">
-                                <XCircle className="w-3 h-3" />
-                                Inativo
+                                <XCircle className="w-3 h-3" /> Inativo
                               </Badge>
                             )}
                           </TableCell>
@@ -361,12 +426,13 @@ const ClientesPage = () => {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => openEditClient(client)}>
-                                  <Pencil className="w-4 h-4 mr-2" />
-                                  Editar Cliente
+                                  <Pencil className="w-4 h-4 mr-2" /> Editar Cliente
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openSapConfig(client)}>
-                                  <Server className="w-4 h-4 mr-2" />
-                                  Configurar SAP
+                                  <Server className="w-4 h-4 mr-2" /> Configurar SAP
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openSpedUpload(client)}>
+                                  <Upload className="w-4 h-4 mr-2" /> Carga PN (SPED)
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-destructive"
@@ -376,8 +442,7 @@ const ClientesPage = () => {
                                     }
                                   }}
                                 >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Excluir
+                                  <Trash2 className="w-4 h-4 mr-2" /> Excluir
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -427,7 +492,9 @@ const ClientesPage = () => {
             </div>
             <DialogFooter>
               <Button type="submit" disabled={createClientMutation.isPending || updateClientMutation.isPending}>
-                {createClientMutation.isPending || updateClientMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {createClientMutation.isPending || updateClientMutation.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  : null}
                 {editingClient ? "Salvar Alterações" : "Criar Cliente"}
               </Button>
             </DialogFooter>
@@ -444,7 +511,7 @@ const ClientesPage = () => {
               Atenção: Estas credenciais são restritas a este cliente específico.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveSap} className="space-y-4">
+          <form onSubmit={handleSaveSap} className="space-y-4" autoComplete="off">
             <div className="space-y-2">
               <Label className="text-xs">URL do Service Layer</Label>
               <Input
@@ -476,6 +543,7 @@ const ClientesPage = () => {
               <Label className="text-xs">Senha</Label>
               <Input
                 type="password"
+                autoComplete="new-password"
                 placeholder={configuringSap?.client_sap_configs?.[0] ? "Digite para alterar" : "Senha do SAP"}
                 value={sapForm.sap_password}
                 onChange={(e) => setSapForm({ ...sapForm, sap_password: e.target.value })}
@@ -494,8 +562,44 @@ const ClientesPage = () => {
                 Cancelar
               </Button>
               <Button type="submit" disabled={saveSapMutation.isPending}>
-                {saveSapMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Server className="w-4 h-4 mr-2" />}
+                {saveSapMutation.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  : <Server className="w-4 h-4 mr-2" />}
                 Salvar Configuração
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SPED Upload Dialog */}
+      <Dialog open={spedDialogOpen} onOpenChange={setSpedDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Carga PN (SPED): {uploadingClient?.name}</DialogTitle>
+            <DialogDescription>
+              Selecione o arquivo SPED (.txt) para iniciar a carga de Parceiros de Negócio.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSpedUpload} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Arquivo SPED (.txt)</Label>
+              <Input
+                type="file"
+                accept=".txt"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSpedDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={uploading || !selectedFile}>
+                {uploading
+                  ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  : <Upload className="w-4 h-4 mr-2" />}
+                Iniciar Carga
               </Button>
             </DialogFooter>
           </form>
