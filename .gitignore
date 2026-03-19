@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Arquivos temporários do Antigravity
+debug_hmac.js
+deep_search.cjs
+find_anything.cjs
+find_node_local.cjs
+find_node_local.js
+list_nodes.cjs
+search_v4.cjs
+sap_config_node.json
+task.md
+walkthrough.md
+walkthrough*
+build_log
+*.cjs
+*.temp
+
