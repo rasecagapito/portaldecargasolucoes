@@ -97,19 +97,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    const updateData: any = {
-      status,
-      finished_at: new Date().toISOString(),
-    };
+    let updateData: Record<string, unknown>;
 
-    if (entity_type === "carga") {
-      updateData.result = result || null;
-      updateData.error_message = error_message || null;
+    if (entity_type === "sped") {
+      // sped_uploads schema: status, updated_at, result_log
+      updateData = {
+        status,
+        result_log: result ? JSON.stringify(result) : null,
+        updated_at: new Date().toISOString(),
+      };
     } else {
-      // SPED specific mapping if needed, otherwise use general
-      if (status === "error") {
-        updateData.error_message = error_message || "Erro desconhecido no processamento SPED";
-      }
+      // carga_executions aceita result, error_message e finished_at
+      updateData = {
+        status,
+        result: result || null,
+        error_message: error_message || null,
+        finished_at: new Date().toISOString(),
+      };
     }
 
     const { error: updateError } = await adminClient

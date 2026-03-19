@@ -15,27 +15,30 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/home" element={<ProtectedRoute module="dashboard"><Home /></ProtectedRoute>} />
-            <Route path="/usuarios" element={<ProtectedRoute module="usuarios"><UsersPage /></ProtectedRoute>} />
-            <Route path="/clientes" element={<ProtectedRoute module="configuracoes"><ClientesPage /></ProtectedRoute>} />
-            <Route path="/cargas" element={<ProtectedRoute module="cargas"><CargasPage /></ProtectedRoute>} />
-            <Route path="/configuracoes" element={<ProtectedRoute module="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  console.log("🚀 App: Rendering...");
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<Login />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/home" element={<ProtectedRoute module="dashboard"><Home /></ProtectedRoute>} />
+              <Route path="/usuarios" element={<ProtectedRoute module="usuarios"><UsersPage /></ProtectedRoute>} />
+              <Route path="/clientes" element={<ProtectedRoute module="configuracoes"><ClientesPage /></ProtectedRoute>} />
+              <Route path="/cargas" element={<ProtectedRoute module="cargas"><CargasPage /></ProtectedRoute>} />
+              <Route path="/configuracoes" element={<ProtectedRoute module="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

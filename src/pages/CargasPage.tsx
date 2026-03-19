@@ -78,7 +78,7 @@ const statusConfig: Record<string, { label: string; class: string; icon: React.E
 };
 
 const CargasPage = () => {
-  const { session, isAdmin, canCreate } = useAuth();
+  const { session, profile, isAdmin, canCreate } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
@@ -87,6 +87,7 @@ const CargasPage = () => {
   const [cargaFormDialog, setCargaFormDialog] = useState<Carga | null | "new">(null);
   const [launchParams, setLaunchParams] = useState("");
   const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
   const [formItems, setFormItems] = useState<Array<{ id?: string; name: string; webhook_url: string; active: boolean; execution_order: number }>>([]);
   
   // SPED State
@@ -206,6 +207,34 @@ const CargasPage = () => {
       const hasActive = data?.some((e) => e.status === "pending" || e.status === "running");
       return hasActive ? 5000 : false;
     },
+  });
+
+  // Fetch SPED uploads history
+  const { data: spedHistory = [] } = useQuery({
+    queryKey: ["sped_uploads_history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sped_uploads")
+        .select("id, status, result_log, created_at, updated_at, client_id")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+
+      // Buscar nomes dos clientes
+      const clientIds = [...new Set((data || []).map(s => s.client_id))];
+      const { data: clientsData } = clientIds.length > 0
+        ? await supabase.from("clients").select("id, name").in("id", clientIds)
+        : { data: [] };
+      const clientMap = Object.fromEntries(
+        (clientsData || []).map(c => [c.id, c.name])
+      );
+
+      return (data || []).map(s => ({
+        ...s,
+        client_name: clientMap[s.client_id] || "—",
+      }));
+    },
+    refetchInterval: 10000,
   });
 
   // Dispatch mutation (now dispatches a carga_item)
@@ -691,97 +720,160 @@ const CargasPage = () => {
 
           {/* History Tab */}
           <TabsContent value="history">
-            <Card className="border border-border">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">Histórico de Execuções</CardTitle>
-                  <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar execuções..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-9 h-9 text-sm bg-secondary border-0"
-                    />
+            <div className="space-y-6">
+              {/* SPED History */}
+              <Card className="border border-border">
+                <CardHeader className="pb-3 border-b border-border mb-4 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                        <FileUp className="w-4 h-4 text-primary" />
+                      </div>
+                      <CardTitle className="text-base font-bold text-primary">Cargas SPED</CardTitle>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {loadingExecs ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
+                </CardHeader>
+                <CardContent className="p-0">
                   <Table>
                     <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="pl-6">ID</TableHead>
-                        <TableHead>Módulo</TableHead>
-                        <TableHead>Execução</TableHead>
+                      <TableRow className="hover:bg-transparent bg-muted/50">
+                        <TableHead className="pl-6 w-[120px]">ID</TableHead>
+                        <TableHead>Cliente</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Usuário</TableHead>
                         <TableHead>Início</TableHead>
-                        <TableHead>Duração</TableHead>
-                        <TableHead className="w-10" />
+                        <TableHead>Atualizado</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {executions
-                        .filter((e) =>
-                          (e.carga_name || "").toLowerCase().includes(search.toLowerCase()) ||
-                          (e.carga_item_name || "").toLowerCase().includes(search.toLowerCase()) ||
-                          e.id.toLowerCase().includes(search.toLowerCase())
-                        )
-                        .map((exec) => {
-                          const config = statusConfig[exec.status] || statusConfig.pending;
-                          return (
-                            <TableRow key={exec.id} className="cursor-pointer">
-                              <TableCell className="pl-6 font-mono text-xs">{exec.id.slice(0, 8)}</TableCell>
-                              <TableCell className="text-sm font-medium">{exec.carga_name}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{exec.carga_item_name || "—"}</TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className={`text-[11px] font-medium gap-1 ${config.class}`}>
-                                  <config.icon className={`w-3 h-3 ${exec.status === "running" ? "animate-spin" : ""}`} />
-                                  {config.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">{exec.user_name}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{formatDate(exec.started_at)}</TableCell>
-                              <TableCell className="text-sm font-mono">{getDuration(exec.started_at, exec.finished_at)}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1">
-                                  {(exec.status === "pending" || exec.status === "running") && (isAdmin || canCreate("cargas")) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => cancelMutation.mutate(exec.id)}
-                                      disabled={cancelMutation.isPending}
-                                      title="Parar execução"
-                                    >
-                                      <StopCircle className="w-4 h-4" />
-                                    </Button>
-                                  )}
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailDialog(exec.id)}>
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      {executions.length === 0 && (
+                      {spedHistory.map((sped) => {
+                        const config = statusConfig[sped.status] || statusConfig.pending;
+                        return (
+                          <TableRow key={sped.id} className="group">
+                            <TableCell className="pl-6 font-mono text-xs">{sped.id.slice(0, 8)}</TableCell>
+                            <TableCell className="text-sm font-medium">{sped.client_name}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className={`text-[10px] font-medium gap-1 ${config.class}`}>
+                                <config.icon className={`w-3 h-3 ${sped.status === "running" || sped.status === "uploading" || sped.status === "processing" ? "animate-spin" : ""}`} />
+                                {sped.status === "uploading" ? "Enviando" : 
+                                 sped.status === "processing" ? "Processando" : 
+                                 config.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatDate(sped.created_at)}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatDate(sped.updated_at)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {spedHistory.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                            Nenhuma execução encontrada
+                          <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">
+                            Nenhuma carga SPED encontrada
                           </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
                   </Table>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Legacy Executions */}
+              <Card className="border border-border">
+                <CardHeader className="pb-3 border-b border-border mb-4 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <CardTitle className="text-base font-semibold text-muted-foreground">Histórico de Execuções (legado)</CardTitle>
+                    </div>
+                    <div className="relative w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar execuções..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9 h-9 text-sm bg-secondary border-0"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loadingExecs ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent bg-muted/50">
+                          <TableHead className="pl-6 w-[120px]">ID</TableHead>
+                          <TableHead>Módulo</TableHead>
+                          <TableHead>Execução</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>Início</TableHead>
+                          <TableHead>Duração</TableHead>
+                          <TableHead className="w-10" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {executions
+                          .filter((e) =>
+                            (e.carga_name || "").toLowerCase().includes(search.toLowerCase()) ||
+                            (e.carga_item_name || "").toLowerCase().includes(search.toLowerCase()) ||
+                            e.id.toLowerCase().includes(search.toLowerCase())
+                          )
+                          .map((exec) => {
+                            const config = statusConfig[exec.status] || statusConfig.pending;
+                            return (
+                              <TableRow key={exec.id} className="cursor-pointer group">
+                                <TableCell className="pl-6 font-mono text-xs">{exec.id.slice(0, 8)}</TableCell>
+                                <TableCell className="text-sm font-medium">{exec.carga_name}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{exec.carga_item_name || "—"}</TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className={`text-[10px] font-medium gap-1 ${config.class}`}>
+                                    <config.icon className={`w-3 h-3 ${exec.status === "running" ? "animate-spin" : ""}`} />
+                                    {config.label}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm">{exec.user_name}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{formatDate(exec.started_at)}</TableCell>
+                                <TableCell className="text-xs font-mono">{getDuration(exec.started_at, exec.finished_at)}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1">
+                                    {(exec.status === "pending" || exec.status === "running") && (isAdmin || canCreate("cargas")) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => cancelMutation.mutate(exec.id)}
+                                        disabled={cancelMutation.isPending}
+                                        title="Parar execução"
+                                      >
+                                        <StopCircle className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 group-hover:bg-muted" onClick={() => setDetailDialog(exec.id)}>
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        {executions.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center py-12 text-muted-foreground italic">
+                              Nenhuma execução encontrada
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Manage Tab (admin only) */}

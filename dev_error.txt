@@ -1,0 +1,49 @@
+﻿
+> vite_react_shadcn_ts@0.0.0 dev
+> vite --host --port 8080
+
+node.exe : Failed to 
+resolve dependency: [36
+mreact/jsx-dev-runtime[
+39m, present in 
+'optimizeDeps.include'
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo      
+        : NotSpecified: 
+(Faile    d to 
+resol...zeDeps.inc    
+lude':String) [], Remot 
+   eException
+    + 
+FullyQualifiedErrorId   
+  : NativeCommandError
+ 
+[31merror when 
+starting dev server:
+Error: Port 8080 is 
+already in use
+    at Server.onError (f
+ile:///N:/Pessoal/44-IA/
+Antigravity/Projetos/Pro
+jetos/central-projetos/p
+rojetos/Portal%20de%20Au
+toma%C3%A7%C3%A3o%20B1/p
+ortalsolucoes-master/nod
+e_modules/vite/dist/node
+/chunks/dep-C6uTJdX2.js:
+45596:18)
+    at Server.emit 
+(node:events:508:28)
+    at emitErrorNT 
+(node:net:1976:8)
+    at process.processTi
+cksAndRejections (node:i
+nternal/process/task_que
+ues:89:21)[39m
