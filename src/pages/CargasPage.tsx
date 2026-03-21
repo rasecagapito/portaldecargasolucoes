@@ -69,6 +69,15 @@ interface CargaExecution {
   user_name?: string;
 }
 
+interface SpedHistoryItem {
+  id: string;
+  status: string;
+  created_at: string;
+  updated_at: string | null;
+  client_id: string;
+  client_name?: string;
+}
+
 const statusConfig: Record<string, { label: string; class: string; icon: React.ElementType }> = {
   success: { label: "Sucesso", class: "bg-status-success/10 text-[hsl(var(--status-success))]", icon: CheckCircle2 },
   running: { label: "Executando", class: "bg-status-running/10 text-[hsl(var(--status-running))]", icon: Loader2 },
@@ -213,23 +222,50 @@ const CargasPage = () => {
   const { data: spedHistory = [] } = useQuery({
     queryKey: ["sped_uploads_history"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: modernData, error: modernError } = await supabase
         .from("sped_uploads")
-        .select("id, status, result_log, created_at, updated_at, client_id")
+        .select("id, status, created_at, finished_at, client_id")
         .order("created_at", { ascending: false })
         .limit(50);
-      if (error) throw error;
+
+      let normalizedRows: SpedHistoryItem[] = [];
+
+      if (!modernError) {
+        normalizedRows = (modernData || []).map((row: { id: string; status: string; created_at: string; finished_at: string | null; client_id: string }) => ({
+          id: row.id,
+          status: row.status,
+          created_at: row.created_at,
+          updated_at: row.finished_at ?? row.created_at,
+          client_id: row.client_id,
+        }));
+      } else {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from("sped_uploads")
+          .select("id, status, created_at, updated_at, client_id")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (legacyError) throw modernError;
+
+        normalizedRows = (legacyData || []).map((row: { id: string; status: string; created_at: string; updated_at: string | null; client_id: string }) => ({
+          id: row.id,
+          status: row.status,
+          created_at: row.created_at,
+          updated_at: row.updated_at ?? row.created_at,
+          client_id: row.client_id,
+        }));
+      }
 
       // Buscar nomes dos clientes
-      const clientIds = [...new Set((data || []).map(s => s.client_id))];
+      const clientIds = [...new Set(normalizedRows.map((s) => s.client_id))];
       const { data: clientsData } = clientIds.length > 0
         ? await supabase.from("clients").select("id, name").in("id", clientIds)
         : { data: [] };
       const clientMap = Object.fromEntries(
-        (clientsData || []).map(c => [c.id, c.name])
+        (clientsData || []).map((c) => [c.id, c.name])
       );
 
-      return (data || []).map(s => ({
+      return normalizedRows.map((s) => ({
         ...s,
         client_name: clientMap[s.client_id] || "—",
       }));
@@ -418,6 +454,12 @@ const CargasPage = () => {
 
       // 2. Dispatch Edge Function
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        await supabase.auth.refreshSession();
+        const { data: { session: refreshed } } = await supabase.auth.getSession();
+        if (!refreshed?.access_token) throw new Error("Sessão expirada. Faça login novamente.");
+        Object.assign(currentSession ?? {}, refreshed);
+      }
       const res = await fetch(
         `https://kmunvgkwmdonygmldhgf.supabase.co/functions/v1/dispatch-carga-sped`,
         {
@@ -425,6 +467,8 @@ const CargasPage = () => {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${currentSession?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || 
+                    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             client_id: selectedClientId,
@@ -439,8 +483,9 @@ const CargasPage = () => {
       setSpedUploadId(json.id);
       setSpedStatus("processing");
       toast.success("Arquivo enviado! Processamento iniciado.");
-    } catch (err: any) {
-      toast.error("Erro no processo", { description: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido no upload";
+      toast.error("Erro no processo", { description: message });
       setSpedStatus("error");
     } finally {
       setIsUploading(false);
