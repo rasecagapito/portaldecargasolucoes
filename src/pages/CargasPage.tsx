@@ -62,7 +62,7 @@ interface CargaExecution {
   result: unknown;
   error_message: string | null;
   started_at: string | null;
-  finished_at: string | null;
+  updated_at: string | null;
   created_at: string;
   carga_name?: string;
   carga_item_name?: string;
@@ -224,18 +224,18 @@ const CargasPage = () => {
     queryFn: async () => {
       const { data: modernData, error: modernError } = await supabase
         .from("sped_uploads")
-        .select("id, status, created_at, finished_at, client_id")
+        .select("id, status, created_at, updated_at, client_id")
         .order("created_at", { ascending: false })
         .limit(50);
 
       let normalizedRows: SpedHistoryItem[] = [];
 
       if (!modernError) {
-        normalizedRows = (modernData || []).map((row: { id: string; status: string; created_at: string; finished_at: string | null; client_id: string }) => ({
+        normalizedRows = (modernData || []).map((row: { id: string; status: string; created_at: string; updated_at: string | null; client_id: string }) => ({
           id: row.id,
           status: row.status,
           created_at: row.created_at,
-          updated_at: row.finished_at ?? row.created_at,
+          updated_at: row.updated_at ?? row.created_at,
           client_id: row.client_id,
         }));
       } else {
@@ -883,7 +883,7 @@ const CargasPage = () => {
                                 </TableCell>
                                 <TableCell className="text-sm">{exec.user_name}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{formatDate(exec.started_at)}</TableCell>
-                                <TableCell className="text-xs font-mono">{getDuration(exec.started_at, exec.finished_at)}</TableCell>
+                                <TableCell className="text-xs font-mono">{getDuration(exec.started_at, exec.updated_at)}</TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-1">
                                     {(exec.status === "pending" || exec.status === "running") && (isAdmin || canCreate("cargas")) && (
@@ -1035,7 +1035,7 @@ const CargasPage = () => {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Duração</p>
-                    <p className="font-mono">{getDuration(selectedExec.started_at, selectedExec.finished_at)}</p>
+                    <p className="font-mono">{getDuration(selectedExec.started_at, selectedExec.updated_at)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Usuário</p>
@@ -1082,14 +1082,14 @@ const CargasPage = () => {
                       <div className="relative">
                         <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[hsl(var(--status-success))]" />
                         <p className="text-sm font-medium">Execução concluída</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(selectedExec.finished_at)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(selectedExec.updated_at)}</p>
                       </div>
                     )}
                     {selectedExec.status === "error" && (
                       <div className="relative">
                         <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[hsl(var(--status-error))]" />
                         <p className="text-sm font-medium">Erro na execução</p>
-                        <p className="text-xs text-muted-foreground">{selectedExec.error_message || formatDate(selectedExec.finished_at)}</p>
+                        <p className="text-xs text-muted-foreground">{selectedExec.error_message || formatDate(selectedExec.updated_at)}</p>
                       </div>
                     )}
                     {(selectedExec.status === "running" || selectedExec.status === "pending") && (
